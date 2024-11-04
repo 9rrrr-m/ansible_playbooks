@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+---
+- name: List active CentOS repositories
+  command: dnf repolist
+  register: __gfs2_repolist
+  changed_when: false
+  check_mode: false
+
+- name: Enable CentOS repositories
+  command: dnf config-manager --set-enabled {{ item.id | quote }}
+  loop: "{{ __gfs2_repos }}"
+  when: item.id not in __gfs2_repolist.stdout
+  changed_when: item.name not in __gfs2_repolist.stdout

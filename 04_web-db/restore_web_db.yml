@@ -1,0 +1,64 @@
+---
+- name: Restore web_db.yml
+  hosts: web1
+  become: true
+  tasks:
+    # ------------------------- #
+    # 1) 방화벽 서비스, 포트 제거
+    # 2) 서비스 종료
+    # 3) 서비스 설정 삭제
+    # 4) 패키지 삭제
+    # ------------------------- #
+
+    # 1) 방화벽 서비스, 포트 제거
+    # * http, https, mysql
+    - name: 1) 방화벽 서비스, 포트 제거 - http, https, mysql
+      ansible.posix.firewalld:
+        service: "{{ item }}"
+        permanent: true
+        immediate: true
+        state: disabled
+      loop:
+        - http
+        - https
+        - mysql
+
+    # 2) 서비스 종료
+    # * httpd.service, mariadb.service
+    - name: 2) 서비스 종료 - httpd.service, mariadb.service
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - httpd
+        - mariadb
+      ignore_errors: true
+
+    # 3) 서비스 설정 삭제
+    # * (WEB) /var/www/html/index.php
+    - name: 3) 서비스 설정 삭제 - /var/www/html/index.php
+      ansible.builtin.file:
+        path: /var/www/html/index.php
+        state: absent
+
+    # 4) 패키지 삭제
+    # * 웹 패키지: httpd, mod_ssl
+    # * 언어 패키지: php, php-mysqlnd, php-pdo
+    # * DB 패키지: mariadb-server, mariadb, python3-PyMySQL
+    - name: 4) 패키지 삭제 - httpd, mod_ssl, php, php-mysqlnd, php-pdo, mariadb-server, mariadb, python3-PyMySQL
+      ansible.builtin.dnf:
+        name:
+          - httpd
+          - mod_ssl
+          - php
+          - php-mysqlnd
+          - php-pdo
+          - mariadb-server
+          - mariadb
+          - python3-PyMySQL
+          - mariadb-connector-c-config
+          - mariadb-common
+          - mariadb-connector-c
+          - mariadb-errmsg
+        state: absent

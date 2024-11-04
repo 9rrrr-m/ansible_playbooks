@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Test qdevice - minimal configuration
+  hosts: all
+  vars_files: vars/main.yml
+
+  tasks:
+    - name: Set qnetd address
+      set_fact:
+        __test_qnetd_address: "{{ (ansible_play_hosts_all | length == 1) | ternary('localhost', ansible_play_hosts[0]) }}"
+
+    - name: Run test
+      tags: tests::verify
+      include_tasks: template_qdevice.yml
+      vars:
+        ha_cluster_quorum:
+          device:
+            model: net
+            model_options:
+              - name: host
+                value: "{{ __test_qnetd_address }}"
+              - name: algorithm
+                value: lms
+        __test_expected_lines:
+          - "totem {"
+          - "    version: 2"
+          - "    cluster_name: {{ ha_cluster_cluster_name }}"
+          - "    transport: knet"
+          - "    crypto_cipher: aes256"
+          - "    crypto_hash: sha256"
+          - "}"
+          - "nodelist {"
+          - "}"
+          - "quorum {"
+          - "    provider: corosync_votequorum"
+          - "    device {"
+          - "        model: net"
+          - "        net {"
+          - "            algorithm: lms"
+          - "            host: {{ __test_qnetd_address }}"
+          - "        }"
+          - "    }"
+          - "}"
+          - "logging {"
+          - "    to_logfile: yes"
+          - "    logfile: /var/log/cluster/corosync.log"
+          - "    to_syslog: yes"
+          - "    timestamp: on"
+          - "}"

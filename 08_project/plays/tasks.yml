@@ -1,0 +1,12 @@
+---
+# Playbook:
+- name: 4) 웹 요청 테스트
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    # 4) 웹 요청 - import_playbook
+    - name: 4.1) 웹 요청 - {{ url }}
+      ansible.builtin.uri:
+        url: "{{ url }}"
+        status_code: 200
+        validate_certs: false

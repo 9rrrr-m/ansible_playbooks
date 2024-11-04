@@ -1,0 +1,162 @@
+---
+# Test the configuration, basics input with use_imuxsock option and files output
+#
+# [Configuration]
+# basics input (imuxsock) -> files output (omfile); it is implicitly configured.
+#                            default means using the default rsyslog conf in
+#                            roles/rsyslog/template/output_files.j2.
+# use_imuxsock: true
+#
+# [Test scenario]
+# 0. Run logging role.
+# 1. Check rsyslog.conf file size.
+#    If logging role is executed, the file size is about 100 bytes.
+#    If not executed, the default rsyslog.conf size is larger than 3000 bytes.
+#    Thus, assert the size is less than 1000.
+# 2. Check file count in /etc/rsyslog.d.
+#    If logging role is executed, 5 config files are generated.
+#    Other package could add rsyslog config files such as 21-cloudinit.conf to
+#    /etc/rsyslog.d and the number varies per RHEL version.
+#    Thus, assert the the count is greater than or equal to 5.
+# 3. Check systemctl status of rsyslog as well as error or specific message in
+#    the output.
+# 4. Check a files output config file exists which verifies the generated
+#    filename is correct.
+# 4.1 Check if the files output config file contains the expected filter and
+#     the output file as configured.
+# 4.2 Run logger command and check the log is in the local output file in
+#     {{ __default_system_log }}.
+#
+# TEST CASE 0
+- name: "TEST CASE 0; Ensure that the role runs with parameters with the simplest configuration using imuxsock instead of imjournal"
+  hosts: all
+  vars:
+    __test_files_conf: /etc/rsyslog.d/30-output-files-default_files.conf
+    __default_system_log: /var/log/messages
+
+  tasks:
+    - name: Deploy config to output into local files
+      vars:
+        logging_inputs:
+          - name: basic_input
+            type: basics
+            use_imuxsock: true
+      include_role:
+        name: fedora.linux_system_roles.logging
+        public: true
+
+  # notify Restart rsyslogd is executed at the end of this test task.
+  # thus we have to force to invoke handlers
+    - name: "Force all notified handlers to run at this point, not waiting for normal sync points"
+      meta: flush_handlers
+
+    - name: Ensure config file size and counts
+      vars:
+        __conf_count: 5
+        __conf_size: less
+        __conf_files:
+          - "{{ __test_files_conf }}"
+        __check_systemctl_status: true
+      include_tasks: tasks/check_daemon_config_files.yml
+
+    - name: Check output to messages line
+      command: >-
+        /bin/grep
+        '\\*.info;mail.none;authpriv.none;cron.none.*{{ __default_system_log }}'
+        {{ __test_files_conf }}
+      changed_when: false
+
+    - name: Ensure logger message is logged in a file
+      vars:
+        __logging_index: 0
+        __logging_file: "{{ __default_system_log }}"
+      include_tasks: tasks/test_logger.yml
+
+    - name: Assert {{ __default_system_log }}
+      include_tasks: tasks/assert_varlogmessages.yml
+
+    - name: Check ports managed by firewall and selinux
+      include_tasks: tasks/check_firewall_selinux.yml
+
+    - name: END TEST CASE 0; Clean up the deployed config
+      vars:
+        logging_purge_confs: true
+        logging_inputs: []
+        logging_outputs: []
+        logging_flows: []
+      include_role:
+        name: fedora.linux_system_roles.logging
+        public: true
+
+  # notify Restart rsyslogd is executed at the end of this test task.
+  # thus we have to force to invoke handlers
+    - name: "Force all notified handlers to run at this point, not waiting for normal sync points"
+      meta: flush_handlers
+
+    - name: Check ports managed by firewall and selinux
+      include_tasks: tasks/check_firewall_selinux.yml
+
+    - name: Check if /dev/log is present
+      stat:
+        path: /dev/log
+      register: __dev_log
+
+    - name: Restore /dev/log by restarting journald units
+      when: not __dev_log.stat.exists
+      block:
+      # This is really hacky - but I could not find a reliable way to do this
+      # that works on older rhel8, newer rhel9, and fedora - each platform has
+      # odd idiosyncrasies
+        - name: Restart journald units
+          shell: |
+            set -euxo pipefail
+            exec 1>&2
+            for service in {{ __journald_units | join(" ") }}; do
+              if systemctl is-active "$service"; then
+                systemctl stop "$service" || :
+                sleep 1
+              fi
+            done
+            if [ "$(systemctl show -p SubState systemd-journald.service)" = SubState=dead-resources-pinned ]; then
+              systemctl clean --what fdstore systemd-journald.service
+            fi
+            for service in {{ __journald_units | join(" ") }}; do
+              if ! systemctl is-active "$service"; then
+                systemctl start "$service"
+                sleep 1
+              fi
+            done
+            # dbus needs to be restarted after journald or services will not be able to
+            # listen for dbus
+            for service in dbus dbus-broker systemd-logind; do
+              if systemctl is-active "$service"; then
+                systemctl restart "$service" || { systemctl status "$service" || :; journalctl -ex; }
+              fi
+            done
+            # ensure journal is working again
+            logger tests_imuxsock_files_ensure_journal_working
+            sleep 1
+            journalctl -ex | grep tests_imuxsock_files_ensure_journal_working
+            # ensure loginctl is working - if not it will error with a timeout
+            loginctl list-sessions
+          changed_when: true
+          vars:
+            __journald_units:
+              - systemd-journald.service
+              - systemd-journald-dev-log.socket
+              - systemd-journald.socket
+
+        - name: Ensure /dev/log is present
+          stat:
+            path: /dev/log
+          register: __dev_log
+          failed_when: __dev_log.stat.lnk_target != "/run/systemd/journal/dev-log"
+
+      rescue:
+        - name: Check journal for errors
+          command: journalctl -ex
+          changed_when: false
+
+        - name: Fail
+          fail:
+            msg: "{{ ansible_failed_result }}"

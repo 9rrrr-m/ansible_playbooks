@@ -1,0 +1,7 @@
+{{ ansible_managed | comment }}
+[Service]
+ExecStart=/bin/sleep 3600
+ExecReload=/bin/touch /tmp/foo-reloaded
+
+[Install]
+WantedBy=multi-user.target

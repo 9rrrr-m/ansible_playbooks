@@ -1,0 +1,14 @@
+---
+- name: 환경 파일 배포
+  gather_facts: false
+  hosts: all
+  remote_user: devops
+  become: false
+  tasks:
+    - name: 환경 파일 배포 - $HOME/.bashrc
+      ansible.builtin.template: 
+        src: templates/bashrc.j2
+        dest: /home/devops/.bashrc
+        owner: devops
+        group: devops
+        mode: '0644'

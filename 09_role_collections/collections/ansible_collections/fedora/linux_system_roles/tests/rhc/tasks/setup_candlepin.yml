@@ -1,0 +1,176 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Setup the test data
+  import_tasks: setup_test_data.yml
+
+- name: Deploy Candlepin
+  when: lsr_rhc_test_data_file | length == 0
+  block:
+    - name: Get facts for external test data
+      setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - distribution
+          - distribution_major_version
+
+    - name: Set helper fact for Candlepin base URL
+      set_fact:
+        _cp_url: "https://{{ lsr_rhc_test_data.candlepin_host }}:{{ lsr_rhc_test_data.candlepin_port }}{{ lsr_rhc_test_data.candlepin_prefix }}" # yamllint disable-line
+
+    - name: Set helper fact for Candlepin owner URL
+      set_fact:
+        _cp_url_owner: "{{ _cp_url }}/owners/{{ lsr_rhc_test_data.reg_organization }}" # yamllint disable-line
+
+    - name: Add candlepin hostname to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "127.0.0.1   {{ lsr_rhc_test_data.candlepin_host }}"
+        regexp: ".*{{ lsr_rhc_test_data.candlepin_host }}"
+
+    - name: Install needed packages
+      package:
+        name:
+          - podman
+        state: present
+        use: "{{ __rhc_is_ostree | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+
+    - name: Stop and remove Candlepin container
+      command:
+        argv:
+          - podman
+          - stop
+          - candlepin
+      register: podman_stop_status
+      failed_when:
+        - podman_stop_status.rc != 0
+        - '"no such container" not in podman_stop_status.stderr'
+      changed_when: false
+
+    - name: Start Candlepin container
+      vars:
+        podman_run_cli:
+          - podman
+          - run
+          - --rm
+          - --detach
+          - --hostname
+          - "{{ lsr_rhc_test_data.candlepin_host }}"
+          - --name
+          - candlepin
+          - --publish
+          - 8443:8443
+          - --publish
+          - 8080:8080
+          - "{{ '--privileged' if (ansible_distribution in ['CentOS', 'RedHat'] and ansible_distribution_major_version | int < 8) else '' }}"
+          - ghcr.io/ptoscano/candlepin-unofficial
+      command:
+        argv: "{{ podman_run_cli | reject('match', '^$') | list }}"
+      changed_when: false
+
+    - name: Ensure directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /etc/pki/product
+        - /etc/pki/product-default
+        - /etc/rhsm/ca
+
+    - name: Copy product certificates
+      command:
+        argv:
+          - podman
+          - cp
+          - candlepin:/home/candlepin/devel/candlepin/generated_certs/{{ item }}.pem # yamllint disable-line
+          - /etc/pki/product-default/
+      changed_when: false
+      loop:
+        - "7050"
+
+    - name: Copy Candlepin CA certificate for subscription-manager
+      command:
+        argv:
+          - podman
+          - cp
+          - candlepin:/etc/candlepin/certs/candlepin-ca.crt
+          - /etc/rhsm/ca/candlepin-ca.pem
+      changed_when: false
+
+    - name: Copy Candlepin CA certificate for system
+      command:
+        argv:
+          - podman
+          - cp
+          - candlepin:/etc/candlepin/certs/candlepin-ca.crt
+          - /etc/pki/ca-trust/source/anchors/candlepin-ca.pem
+      changed_when: false
+
+    - name: Update system certificates store
+      command:
+        argv:
+          - update-ca-trust
+          - extract
+      changed_when: false
+
+    - name: Wait for started Candlepin
+      uri:
+        url: "{{ _cp_url }}"
+        method: HEAD
+        validate_certs: false
+      register: waitresult
+      until: waitresult is succeeded
+      retries: 60
+      delay: 5
+
+    - name: Install GPG key for RPM repositories
+      get_url:
+        url: "http://{{ lsr_rhc_test_data.candlepin_host }}:8080/RPM-GPG-KEY-candlepin" # yamllint disable-line
+        dest: /etc/pki/rpm-gpg/RPM-GPG-KEY-candlepin
+        mode: "0644"
+
+    - name: Query for default_key activation key
+      uri:
+        url: "{{ _cp_url_owner }}/activation_keys?name={{ lsr_rhc_test_data.reg_activation_keys[0] }}" # yamllint disable-line
+        method: GET
+        url_username: "{{ lsr_rhc_test_data.reg_username }}"
+        url_password: "{{ lsr_rhc_test_data.reg_password }}"
+      register: default_key
+
+    - name: Get pools for product 7050
+      uri:
+        url: "{{ _cp_url_owner }}/pools?product=7050"
+        method: GET
+        url_username: "{{ lsr_rhc_test_data.reg_username }}"
+        url_password: "{{ lsr_rhc_test_data.reg_password }}"
+      register: pools
+
+    - name: Add pools for product 7050 to default_key activation key
+      uri:
+        url: "{{ _cp_url }}/activation_keys/{{ default_key.json[0].id }}/pools/{{ item.id }}" # yamllint disable-line
+        method: POST
+        url_username: "{{ lsr_rhc_test_data.reg_username }}"
+        url_password: "{{ lsr_rhc_test_data.reg_password }}"
+      loop: "{{ pools.json }}"
+
+    - name: Configure environments
+      when: environments | d(false)
+      block:
+        - name: Add environments
+          uri:
+            url: "{{ _cp_url_owner }}/environments"
+            method: POST
+            url_username: "{{ lsr_rhc_test_data.reg_username }}"
+            url_password: "{{ lsr_rhc_test_data.reg_password }}"
+            body_format: json
+            body:
+              name: "{{ item.name }}"
+              description: "{{ item.desc }}"
+              id: "{{ item.id }}"
+          loop:
+            - {name: "Environment 1", desc: "The environment 1", id: "envId1"}
+            - {name: "Environment 2", desc: "The environment 2", id: "envId2"}
+
+- name: Check Candlepin works
+  import_tasks: check_candlepin.yml

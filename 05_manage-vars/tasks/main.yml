@@ -1,0 +1,23 @@
+---
+# ---------------------------------------------- #
+# 1.1.1) 서비스 패키지 설치 - mariadb-server, httpd
+# 1.1.2) 서비스 기동 - mariadb, httpd
+# ---------------------------------------------- #
+
+# 1.1.1) 서비스 패키지 설치 - mariadb-server, httpd
+- name: 1.1.1) 서비스 패키지 설치 - mariadb-server, httpd
+  ansible.builtin.dnf:
+    name:
+    - "{{ ansible_local.custom.packages.db_package }}"
+    - "{{ ansible_local.custom.packages.web_package }}"
+    state: present
+
+# 1.1.2) 서비스 기동 - mariadb, httpd
+- name: 1.1.2) 서비스 기동 - mariadb, httpd
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - "{{ ansible_local.custom.services.db_service }}"
+    - "{{ ansible_local.custom.services.web_service }}"

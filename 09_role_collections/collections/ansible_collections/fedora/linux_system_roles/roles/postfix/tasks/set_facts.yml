@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: BSD-3-Clause
+---
+- name: Ensure ansible_facts used by role are present
+  setup:
+    gather_subset: "{{ __postfix_required_facts_subsets }}"
+  when: __postfix_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Determine if system is ostree and set flag
+  when: not __postfix_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __postfix_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Set platform/version specific variables
+  include_vars: "{{ __postfix_vars_file }}"
+  loop:
+    - "{{ ansible_os_family }}.yml"
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_distribution }}_{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution }}_{{ ansible_distribution_version }}.yml"
+  vars:
+    __postfix_vars_file: "{{ role_path }}/vars/{{ item }}"
+  when: __postfix_vars_file is file

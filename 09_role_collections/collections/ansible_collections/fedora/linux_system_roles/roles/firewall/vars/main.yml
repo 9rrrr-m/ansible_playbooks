@@ -1,0 +1,26 @@
+---
+__firewall_firewalld_dir: /etc/firewalld
+__firewall_firewalld_conf: "{{ __firewall_firewalld_dir }}/firewalld.conf"
+__firewall_usr_lib_dir: /usr/lib/firewalld
+
+# ansible_facts required by the role
+__firewall_required_facts:
+  - python_version
+  - service_mgr
+
+# the subsets of ansible_facts that need to be gathered in case any of the
+# facts in required_facts is missing; see the documentation of
+# the 'gather_subset' parameter of the 'setup' module
+__firewall_required_facts_subsets: "{{ ['!all', '!min'] + __firewall_required_facts }}"
+
+__firewall_packages_base: [firewalld]
+
+# This is the package providing the default /etc/firewall/firewalld.conf
+__firewall_package_with_conf: firewalld
+
+__firewall_service: firewalld
+
+__firewall_conflicting_services:
+  - nftables
+  - iptables
+  - ufw

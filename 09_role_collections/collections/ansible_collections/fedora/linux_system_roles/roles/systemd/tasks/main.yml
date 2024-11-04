@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Determine if system is ostree and set flag
+  when: not __systemd_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __systemd_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Determine if system is transactional update and set flag
+  when: not __systemd_is_transactional is defined
+  block:
+    - name: Check if transactional-update exists in /sbin
+      stat:
+        path: /sbin/transactional-update
+      register: __transactional_update_stat
+
+    - name: Set flag if transactional-update exists
+      set_fact:
+        __systemd_is_transactional: "{{ __transactional_update_stat.stat.exists }}"
+
+- name: Ensure required packages are installed
+  package:
+    name: "{{ __systemd_packages }}"
+    state: present
+    use: "{{ (__systemd_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+  register: systemd_package_result
+
+- name: Handle reboot for transactional update systems
+  when:
+    - __systemd_is_transactional | d(false)
+    - systemd_package_result is changed
+  block:
+    - name: Notify user that reboot is needed to apply changes
+      debug:
+        msg: >
+          Reboot required to apply changes due to transactional updates.
+
+    - name: Reboot transactional update systems
+      reboot:
+        msg: Rebooting the system to apply transactional update changes.
+      when: systemd_transactional_update_reboot_ok | bool
+
+    - name: Fail if reboot is needed and not set
+      fail:
+        msg: >
+          Reboot is required but not allowed. Please set 'systemd_transactional_update_reboot_ok' to proceed.
+      when:
+        - systemd_transactional_update_reboot_ok is none
+
+- name: Deploy unit files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ __admin_units_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ systemd_unit_files }}"
+  register: __systemd_unit_files_result
+
+- name: Deploy unit file templates
+  template:
+    src: "{{ item }}"
+    dest: "{{ __admin_units_dir }}/{{ __dest }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ systemd_unit_file_templates }}"
+  register: __systemd_unit_file_templates_result
+  vars:
+    __dest: "{{ item | regex_replace('[.]j2$', '') }}"
+
+- name: Create drop-in directories
+  file:
+    path: "{{ __admin_units_dir }}/{{ '.'.join(__dest.split('.')[:-1]) }}.d/"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ systemd_dropins }}"
+  vars:
+    __dest: "{{ item | regex_replace('[.]j2$', '') }}"
+
+- name: Deploy systemd drop in config
+  template:
+    src: "{{ item }}"
+    dest: "{{ __admin_units_dir }}/{{ '.'.join(__dest.split('.')[:-1]) }}.d/99-override.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ systemd_dropins }}"
+  register: __systemd_dropins_result
+  vars:
+    __dest: "{{ item | regex_replace('[.]j2$', '') }}"
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+  when: >
+    __systemd_unit_files_result is changed or
+    __systemd_unit_file_templates_result is changed or
+    __systemd_dropins_result is changed
+
+- name: Ensure required units are started
+  systemd:
+    name: "{{ item }}"
+    state: started
+  loop: "{{ systemd_started_units }}"
+
+- name: Ensure required units are stopped
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ systemd_stopped_units }}"
+
+- name: Ensure required units are restarted
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop: "{{ systemd_restarted_units }}"
+
+- name: Ensure required units are reloaded
+  systemd:
+    name: "{{ item }}"
+    state: reloaded
+  loop: "{{ systemd_reloaded_units }}"
+
+- name: Ensure required units are enabled
+  systemd:
+    name: "{{ item }}"
+    enabled: true
+  loop: "{{ systemd_enabled_units }}"
+
+- name: Ensure required units are disabled
+  systemd:
+    name: "{{ item }}"
+    enabled: false
+  loop: "{{ systemd_disabled_units }}"
+
+- name: Ensure required units are masked
+  systemd:
+    name: "{{ item }}"
+    masked: true
+  loop: "{{ systemd_masked_units }}"
+
+- name: Ensure required units are unmasked
+  systemd:
+    name: "{{ item }}"
+    masked: false
+  loop: "{{ systemd_unmasked_units }}"
+
+- name: Gather systemd units state
+  fedora.linux_system_roles.systemd_units:
+  register: systemd_units

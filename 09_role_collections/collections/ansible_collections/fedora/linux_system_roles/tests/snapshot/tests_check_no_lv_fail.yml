@@ -1,0 +1,35 @@
+---
+- name: Verify the check commmand fails when source LV doesn't exist
+  hosts: all
+  vars:
+    test_disk_min_size: "1g"
+    test_disk_count: 10
+    test_storage_pools:
+      - name: test_vg1
+        disks: "{{ range(0, 3) | map('extract', unused_disks) | list }}"
+        volumes:
+          - name: lv1
+            size: "50%"
+  tasks:
+    - name: Run tests
+      block:
+        - name: Setup
+          include_tasks: tasks/setup.yml
+
+        - name: Test failure of check with verify only set for incorrect LV
+          include_tasks: verify-role-failed.yml
+          vars:
+            __snapshot_failed_regex: "source logical volume does not exist:*"
+            __snapshot_failed_msg: >-
+              Role check did not fail with incorrect LV name
+            __snapshot_failed_params:
+              snapshot_lvm_vg: test_vg1
+              snapshot_lvm_lv: xxxxx
+              snapshot_lvm_snapset_name: snapset1
+              snapshot_lvm_verify_only: true
+              snapshot_lvm_action: check
+            __snapshot_failed_changed: false
+      always:
+        - name: Cleanup
+          include_tasks: tasks/cleanup.yml
+          tags: tests::cleanup

@@ -1,0 +1,60 @@
+---
+# Play 01. 여러가지 변수 테스트
+- name: Play 01. 여러가지 변수 테스트
+  hosts: lamp
+  gather_facts: true
+  vars:
+    - firewall: firewalld
+  tasks:
+    # ------------------------------------------- #
+    # Play 01. 여러가지 변수 테스트
+    # 1.1) 서비스 패키지 설치 및 기동 - mariadb, http
+    # 1.2) 방화벽 패키지 설치
+    # 1.3) 방화벽 서비스 기동
+    # 1.4) 방화벽 포트 등록
+    # 1.5) 웹 페이지 생성 - /var/www/html/index.html
+    # ------------------------------------------- #
+
+    # 1.0) include_vars
+    - name: 1.0) 포함 변수 적용
+      ansible.builtin.include_vars: vars/main.yml
+
+    # 1.1) 서비스 패키지 설치 및 기동 - mariadb, http
+    - name: 1.1) 서비스 패키지 설치 및 기동 - mariadb, http
+      # include_tasks 테스트
+      ansible.builtin.include_tasks: tasks/main.yml
+
+    # 1.2) 방화벽 패키지 설치
+    - name: 1.2) 방화벽 패키지 설치 - {{ firewall }}
+      # vars 지시자 테스트
+      ansible.builtin.dnf:
+        name: "{{ firewall }}"
+        state: present
+
+    # 1.3) 방화벽 서비스 기동
+    - name: 1.3) 방화벽 서비스 기동 - {{ firewall }}
+      # vars 지시자 테스트
+      ansible.builtin.systemd:
+        name: "{{ firewall }}"
+        state: started
+        enabled: true
+
+    # 1.4) 방화벽 포트 등록
+    - name: 1.4) 방화벽 포트 등록
+      ansible.posix.firewalld:
+        service: "{{ fw_svc }}"
+        permanent: true
+        immediate: true
+        state: "{{ fw_state }}"
+
+    # 1.5) 웹 페이지 생성 - /var/www/html/index.html
+    - name: 1.5) 웹 페이지 생성 - {{ web_root }}/index.html
+      # facts 변수 테스트
+      ansible.builtin.copy:
+        content: |
+          <pre>
+          Hostname: {{ ansible_fqdn }}
+          IP: {{ ansible_default_ipv4.address }}
+          </pre>
+        dest: "{{ web_root }}/index.html"
+        mode: '0644'

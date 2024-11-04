@@ -1,0 +1,12 @@
+firewall_pkg: firewalld
+firewall_svc: firewalld
+web_pkg: httpd
+web_svc: httpd
+ssl_pkg: mod_ssl
+httpdconf_src: files/httpd.conf
+httpdconf_dest: /etc/httpd/conf/httpd.conf
+htaccess_src: files/.htaccess
+secrets_dir: /etc/httpd/secrets
+secrets_src: files/htpasswd
+secrets_dest: "{{ secrets_dir }}/htpasswd"
+web_root: /var/www/html

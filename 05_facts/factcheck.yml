@@ -1,0 +1,33 @@
+---
+- name: Install and start Apache HTTPD
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: 1) packages are present - httpd, firewalld
+      ansible.builtin.yum:
+        name: 
+          - httpd
+          - firewalld
+        state: present
+
+    - name: 2) Correct index.html is present
+      ansible.builtin.copy:
+        content: "Welcome to My Server.\n"
+        dest: /var/www/html/index.html
+        mode: '0644'
+
+    - name: 3) services are started
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - httpd
+        - firewalld
+
+    - name: 4) Configuration firewall
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        immediate: true
+        state: enabled

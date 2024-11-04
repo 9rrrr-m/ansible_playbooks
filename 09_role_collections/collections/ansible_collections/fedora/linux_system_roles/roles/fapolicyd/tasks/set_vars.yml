@@ -1,0 +1,55 @@
+---
+- name: Ensure ansible_facts used by role
+  setup:
+    gather_subset: "{{ __fapolicyd_required_facts_subsets }}"
+  when: __fapolicyd_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Determine if system is ostree and set flag
+  when: not __fapolicyd_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __fapolicyd_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Set platform/version specific variables
+  include_vars: "{{ __vars_file }}"
+  loop:
+    - "{{ ansible_facts['os_family'] }}.yml"
+    - "{{ ansible_facts['distribution'] }}.yml"
+    - >-
+      {{ ansible_facts['distribution'] ~ '_' ~
+      ansible_facts['distribution_major_version'] }}.yml
+    - >-
+      {{ ansible_facts['distribution'] ~ '_' ~
+      ansible_facts['distribution_version'] }}.yml
+  vars:
+    __vars_file: "{{ role_path }}/vars/{{ item }}"
+  when: __vars_file is file
+
+# fapolicyd only supported on EL
+# NOTE - some RedHat os_family like CentOS stream and Fedora
+# only have major version - in that case, assume the version is
+# compatible with the highest released minor version of the
+# major version e.g. CentOS stream 8 is the same as EL 8.9
+# or higher
+- name: Set fapolicyd feature facts for OS versions
+  vars:
+  # use temp vars for readability
+    __major_ver: "{{ ansible_facts['distribution_major_version'] }}"
+    __ver: "{{ ansible_facts['distribution_version'] }}"
+    __distro_ver: "{{ (__major_ver == __ver) | ternary(__major_ver ~ '.9999', __ver) }}"
+    __is_redhat: "{{ ansible_facts['os_family'] == 'RedHat' }}"
+  set_fact:
+    __fapolicyd_supported: "{{ __is_redhat and __distro_ver is version('8.1', '>=') }}"
+    __fapolicyd_trust_supported: "{{ __is_redhat and __distro_ver is version('8.3', '>=') }}"
+    __fapolicyd_integrity_supported: "{{ __is_redhat and __distro_ver is version('8.4', '>=') }}"
+    __fapolicyd_trustfiles_supported: "{{ __is_redhat and __distro_ver is version('8.4', '>=') }}"
+    __fapolicyd_selinux_supported: "{{ __is_redhat and __distro_ver is version('8.3', '>=') }}"
+    __fapolicyd_configcheck_supported: "{{ __is_redhat and __distro_ver is version('8.6', '>=') }}"
+    __fapolicyd_watch_fs_supported: "{{ __is_redhat and __distro_ver is version('8.2', '>=') }}"
+    __fapolicyd_syslog_format_supported: "{{ __is_redhat and __distro_ver is version('8.3', '>=') }}"

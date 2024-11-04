@@ -1,0 +1,23 @@
+---
+- name: Install Apache and starts the service
+  hosts: webserver
+  tasks:
+    - name: Install the required package
+      ansible.builtin.dnf:
+        name: "{{ ansible_local['custom']['general']['package'] }}"
+        state: present
+    
+    - name: Start the service
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: "{{ ansible_local['custom']['general']['state'] }}"
+      loop:
+        - "{{ ansible_local['custom']['general']['service'] }}"
+        - firewalld
+
+    - name: Open the service with firewall
+      ansible.posix.firewalld:
+        service: "{{ ansible_local['custom']['general']['fwsvc'] }}"
+        permanent: true
+        immediate: true
+        state: enabled

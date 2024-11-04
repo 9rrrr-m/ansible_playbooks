@@ -1,0 +1,10 @@
+---
+- name: 1) [제어 노드] 전원 끄기
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: 1) 전원 끄기 2
+      ansible.posix.at:
+        command: shutdown -h now
+        count: 1
+        units: minutes

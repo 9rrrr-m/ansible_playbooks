@@ -1,0 +1,13 @@
+---
+- name: 0) Restore create_user.yml
+  hosts: webservers
+  become: true
+  remote_user: ansible
+  vars_files:
+    - secret.yml
+  tasks:
+    - name: Remove user from secret.yml
+      ansible.builtin.user:
+        name: "{{ username }}"
+        state: absent
+        remove: true

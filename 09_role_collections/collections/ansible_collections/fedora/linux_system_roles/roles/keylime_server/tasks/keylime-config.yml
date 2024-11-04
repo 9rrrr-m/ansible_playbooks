@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Make sure verifier snippet directory exists
+  file:
+    path: "{{ __keylime_server_verifier_snippet_dir }}"
+    state: directory
+    mode: "0500"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+
+- name: Generate verifier ip/port configuration snippet
+  template:
+    src: "{{ __keylime_server_verifier_ip_config }}.j2"
+    dest: "{{ __keylime_server_verifier_snippet_dir }}/{{ __keylime_server_verifier_ip_config }}"
+    backup: false
+    mode: "0400"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+  notify: Restart services
+
+- name: Generate database configuration snippet
+  template:
+    src: "{{ __keylime_server_verifier_database_config }}.j2"
+    dest: "{{ __keylime_server_verifier_snippet_dir }}/{{ __keylime_server_verifier_database_config }}"
+    backup: false
+    mode: "0400"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+  notify: Restart services
+
+- name: Generate verifier keys/certs configuration snippet
+  template:
+    src: "{{ __keylime_server_verifier_keys_certs_config }}.j2"
+    dest: "{{ __keylime_server_verifier_snippet_dir }}/{{ __keylime_server_verifier_keys_certs_config }}"
+    backup: false
+    mode: "0400"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+  notify: Restart services
+
+- name: Make sure registrar snippet directory exists
+  file:
+    path: "{{ __keylime_server_registrar_snippet_dir }}"
+    state: directory
+    mode: "0500"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+
+- name: Generate registrar ip/port configuration snippet
+  template:
+    src: "{{ __keylime_server_registrar_ip_config }}.j2"
+    dest: "{{ __keylime_server_registrar_snippet_dir }}/{{ __keylime_server_registrar_ip_config }}"
+    backup: false
+    mode: "0400"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+  notify: Restart services
+
+- name: Generate database configuration snippet
+  template:
+    src: "{{ __keylime_server_registrar_database_config }}.j2"
+    dest: "{{ __keylime_server_registrar_snippet_dir }}/{{ __keylime_server_registrar_database_config }}"
+    backup: false
+    mode: "0400"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+  notify: Restart services
+
+- name: Generate registrar keys/certs configuration snippet
+  template:
+    src: "{{ __keylime_server_registrar_keys_certs_config }}.j2"
+    dest: "{{ __keylime_server_registrar_snippet_dir }}/{{ __keylime_server_registrar_keys_certs_config }}"
+    backup: false
+    mode: "0400"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+  notify: Restart services

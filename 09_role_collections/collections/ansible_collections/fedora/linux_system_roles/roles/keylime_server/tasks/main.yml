@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: MIT
+---
+
+- name: Set platform/version specific variables
+  include_tasks: tasks/set_vars.yml
+
+- name: Ensure required packages are installed
+  package:
+    name: "{{ __keylime_server_packages }}"
+    state: present
+    use: "{{ (__keylime_server_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+
+- name: Generate keylime legacy configuration
+  template:
+    src: keylime.conf.j2
+    dest: /etc/keylime.conf
+    backup: false
+    mode: "0600"
+    owner: "{{ __keylime_server_user }}"
+    group: "{{ __keylime_server_group }}"
+  notify: Restart services
+  when: __keylime_server_legacy_config | bool
+
+- name: Generate keylime configuration
+  include_tasks: keylime-config.yml
+  when: not __keylime_server_legacy_config
+
+- name: Ensure the verifier is enabled and started
+  service:
+    name: "{{ __keylime_server_verifier_service }}"
+    state: started
+    enabled: true
+
+- name: Make sure the verifier is up and running
+  ansible.builtin.wait_for:
+    host: "{{ keylime_server_verifier_ip }}"
+    port: "{{ keylime_server_verifier_port }}"
+    timeout: "{{ __keylime_service_timeout }}"
+
+- name: Ensure the registrar is enabled and started
+  service:
+    name: "{{ __keylime_server_registrar_service }}"
+    state: started
+    enabled: true
+
+- name: Make sure the registrar is up and running
+  ansible.builtin.wait_for:
+    host: "{{ keylime_server_registrar_ip }}"
+    port: "{{ keylime_server_registrar_port }}"
+    timeout: "{{ __keylime_service_timeout }}"

@@ -1,0 +1,8 @@
+---
+- name: Restore motd.yml
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: 1) 관리 호스트에서 /etc/motd 파일 내용 비우기
+      ansible.builtin.shell:
+        cmd: '> /etc/motd'

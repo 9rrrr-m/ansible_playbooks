@@ -1,0 +1,17 @@
+---
+- name: 0) 시간 동기화 복원
+  hosts: datacenters
+  tasks:
+    - name: 1) timezone 설정
+      # Asia/Seoul
+      ansible.builtin.timezone:
+        name: Asia/Seoul
+
+    - name: 1) NTP 서버에 시간 동기화
+      # kr.pool.ntp.org
+      ansible.builtin.import_role:
+        name: rhel-system-roles.timesync
+      vars:
+        timesync_ntp_servers:
+          - hostname: kr.pool.ntp.org
+            iburst: true

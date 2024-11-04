@@ -1,0 +1,15 @@
+---
+- name: Restore playbook.yml
+  hosts: fileservers
+  tasks:
+    - name: 1) 변수 포함 - package.yml
+      ansible.builtin.include_vars: package.yml
+
+    - name: 2) 패키지 삭제 - httpd
+      ansible.builtin.include_tasks: remove_packages.yml
+
+    - name: 3) 패키지 삭제 - tomcat
+      ansible.builtin.include_tasks: remove_packages.yml
+      vars:
+        packages:
+          web_pkg: tomcat

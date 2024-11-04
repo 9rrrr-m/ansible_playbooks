@@ -1,0 +1,8 @@
+---
+- name: 0) 인벤토리 변수 테스트
+  hosts: all
+  tasks:
+    - name: 1) 패키지 설치 - {{ package }}
+      ansible.builtin.dnf:
+        name: "{{ package }}"
+        state: present

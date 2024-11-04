@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Determine if system is ostree and set flag
+  when: not __cockpit_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __cockpit_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Install SELinux python2 tools
+  package:
+    name:
+      - libselinux-python
+      - policycoreutils-python
+    state: present
+    use: "{{ (__cockpit_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+  when:
+    - ansible_python_version is version('3', '<')
+    - ansible_distribution in ["Fedora", "CentOS", "RedHat", "Rocky"]
+
+- name: Install SELinux python3 tools
+  package:
+    name:
+      - python3-libselinux
+      - python3-policycoreutils
+    state: present
+    use: "{{ (__cockpit_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+  when:
+    - ansible_python_version is version('3', '>=')
+    - ansible_distribution in ["Fedora", "CentOS", "RedHat", "Rocky"]
+
+- name: Install SELinux tool semanage
+  package:
+    name:
+      - policycoreutils-python-utils
+    state: present
+    use: "{{ (__cockpit_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+  when: ansible_distribution == "Fedora" or (ansible_distribution_major_version | int > 7 and ansible_distribution in ["CentOS", "RedHat", "Rocky"])

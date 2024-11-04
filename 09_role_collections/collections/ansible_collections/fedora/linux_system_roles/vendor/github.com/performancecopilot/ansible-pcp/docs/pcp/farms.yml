@@ -1,0 +1,10 @@
+---
+- name: Example of multiple target hosts
+  hosts: monitoring
+  roles:
+    - role: performancecopilot.metrics.pcp
+      vars:
+        pcp_rest_api: true
+        pcp_pmlogger_interval: 10
+        pcp_pmlogger_discard: 5
+        pcp_target_hosts: ["webserver.example.com", "database.example.com"]

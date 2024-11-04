@@ -1,0 +1,46 @@
+---
+# yamllint disable rule:line-length
+- name: Set ovirt platform/version specific variables
+  include_tasks: "{{ role_path }}/tasks/inputs/ovirt/set_vars.yml"
+
+# yamllint enable rule:line-length
+# Deploy configuration files
+- name: "Install/Update oVirt input packages and generate configuration files in /etc/rsyslog.d"
+  vars:
+    __rsyslog_packages: "{{ __rsyslog_ovirt_prereq_packages + __rsyslog_ovirt_packages }}"
+    __rsyslog_rules: "{{ __rsyslog_ovirt_rules }}"
+  include_tasks:
+    file: "{{ role_path }}/tasks/deploy.yml"
+
+- name: "Create oVirt input configuration file /etc/rsyslog.d/input-ovirt-{{ __rsyslog_input.name }}"
+  vars:
+    __rsyslog_packages: []
+    __rsyslog_rules:
+      - name: "input-ovirt-{{ __rsyslog_input.name }}"
+        type: input
+        sections:
+          - options: "{{ lookup('template', 'input_ovirt.j2') }}"
+        state: "{{ __rsyslog_input.state | d('present') }}"
+  include_tasks:
+    file: "{{ role_path }}/tasks/deploy.yml"
+  when:
+    - __rsyslog_input.type | d('') == 'ovirt'
+    - __rsyslog_input.subtype | d('') in ['collectd','engine','vdsm']
+
+- name: Ensure collectd port is allowed for rsyslogd to listen to
+  include_role:
+    name: fedora.linux_system_roles.selinux
+  vars:
+    selinux_ports:
+      - ports: "{{ __rsyslog_input.rsyslog_read_collectd_port | d(44514) }}"
+        proto: tcp
+        setype: syslogd_port_t
+        state: present
+        local: true
+  when: __rsyslog_input.type | d('') == 'ovirt'
+
+- name: Notify rsyslogd restart
+  debug:
+    msg: Notify rsyslogd restart
+  notify: Restart rsyslogd
+  when: __rsyslog_input.type | d('') == 'ovirt'

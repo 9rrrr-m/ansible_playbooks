@@ -1,0 +1,32 @@
+---
+- name: 0) Restore site.yml
+  hosts: all
+  tasks:
+    # ------------------------------------- #
+    # 1) 방화벽에 포트 제거 - http
+    # 2) 서비스 내리기 - httpd.service
+    # 3) 파일 삭제 - /var/www/html/index.html
+    # 4) 패키지 삭제 - httpd
+    # ------------------------------------- #
+    - name: 1) 방화벽에 포트 제거 - (firewalld) http
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        immediate: true
+        state: disabled
+
+    - name: 2) 서비스 내리기 - (service, systemd) httpd.service
+      ansible.builtin.systemd:
+        name: httpd
+        enabled: false
+        state: stopped
+
+    - name: 3) 파일 삭제 - (file) /var/www/html/index.html
+      ansible.builtin.file:
+        path: /var/www/html/index.html
+        state: absent
+
+    - name: 4) 패키지 삭제 - (dnf) httpd
+      ansible.builtin.dnf:
+        name: httpd
+        state: absent

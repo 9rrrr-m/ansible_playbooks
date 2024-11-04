@@ -1,0 +1,43 @@
+---
+- name: Restore playbook.yml
+  hosts: webserver
+  vars_files:
+    - vars/vars.yml
+  tasks:
+    # ----------------------------------------- #
+    # 1) 방화벽 등록 제거
+    # 2) 서비스 종료
+    # 3) 서버 설정 삭제 - /var/www/html/index.html
+    # 4) 4) 패키지 삭제 - web_pkg, python_pkg
+    # ----------------------------------------- #
+
+    # 1) 방화벽 등록 제거
+    - name: 1) 방화벽 등록 제거 - {{ open_service }}
+      ansible.posix.firewalld:
+        service: "{{ open_service }}"
+        permanent: true
+        immediate: true
+        state: disabled
+
+    # 2) 서비스 종료
+    - name: 2) 서비스 종료 - {{ web_service }}
+      ansible.builtin.systemd:
+        service: "{{ web_service }}"
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    # 3) 서버 설정 삭제 - /var/www/html/index.html
+    - name: 3) 서버 설정 삭제 - /var/www/html/index.html
+      ansible.builtin.file:
+        path: /var/www/html/index.html
+        state: absent
+
+    # 4) 패키지 삭제 - web_pkg, python_pkg
+    - name: 4) 패키지 삭제 - {{ web_pkg }}, {{ python_pkg }}
+      ansible.builtin.dnf:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ web_pkg }}"
+        - "{{ python_pkg }}"

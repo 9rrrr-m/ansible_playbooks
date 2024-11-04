@@ -1,0 +1,12 @@
+---
+- name: 0) create user accounts for our servers
+  hosts: web1.example.com
+  become: true
+  remote_user: ansible
+  vars_files:
+    - secret.yml
+  tasks:
+    - name: Creating user from secret.yml
+      ansible.builtin.user:
+        name: "{{ username }}"
+        password: "{{ pwhash }}"

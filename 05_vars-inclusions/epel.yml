@@ -1,0 +1,9 @@
+---
+- name: Play 01. epel-release 패키지 설치
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: 1.1) epel-release 패키지 설치
+      ansible.builtin.dnf:
+        name: epel-release
+        state: present

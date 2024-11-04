@@ -1,0 +1,11 @@
+---
+- name: Ensure that the role runs with default parameters
+  hosts: all
+  roles:
+    - fedora.linux_system_roles.vpn
+  post_tasks:
+    - name: Cleanup
+      include_tasks: tasks/cleanup.yml
+      tags:
+        - tests::cleanup
+  gather_facts: false

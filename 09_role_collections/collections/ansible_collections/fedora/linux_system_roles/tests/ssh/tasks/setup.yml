@@ -1,0 +1,43 @@
+---
+- name: Ensure facts used by test
+  setup:
+    gather_subset: min
+  when: "'os_family' not in ansible_facts"
+
+- name: Determine if system is ostree and set flag
+  when: not __ssh_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __ssh_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Make sure openssh is installed before creating backup
+  vars:
+    __ssh_test_packages: >-
+      {{
+        "openssh-clients" if ansible_facts['os_family'] == 'RedHat'
+        else "openssh-client"
+      }}
+  package:
+    name: "{{ __ssh_test_packages }}"
+    state: present
+    use: "{{ (__ssh_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+
+- name: Define common variables
+  ansible.builtin.set_fact:
+    main_ssh_config: /etc/ssh/ssh_config
+    main_ssh_config_name: ssh_config
+    main_ssh_config_path: /etc/ssh/
+
+- name: Define specific variables
+  ansible.builtin.set_fact:
+    main_ssh_config: /etc/ssh/ssh_config.d/00-ansible.conf
+    main_ssh_config_name: 00-ansible.conf
+    main_ssh_config_path: /etc/ssh/ssh_config.d/
+  when:
+    - (ansible_facts['os_family'] == 'RedHat' and ansible_facts['distribution_major_version'] | int >= 8) or (ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_major_version'] | int >= 20)

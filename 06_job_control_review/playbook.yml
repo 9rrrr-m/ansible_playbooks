@@ -1,0 +1,79 @@
+---
+- name: 0) 작업 제어 실습
+  hosts: webservers
+  vars_files: vars/vars.yml
+  tasks:
+    # ---------------------------------------- #
+    # 0) 점검 - MEM > 256, 배포판 == CentOS
+    # 1) 패키지 설치 - httpd, mod_ssl, firewalld
+    # 2) 서비스 기동 - httpd, firewalld
+    # 3) 웹 서버 설정 (notify)
+    # 3.1) /etc/pki/tls/certs/localhost.crt
+    # 3.2) /etc/pki/tls/private/localhost.key
+    # 3.3) /var/www/html/index.html
+    # 4) 방화벽 포트 등록
+    # 5) handlers 정의
+    # ---------------------------------------- #
+
+    # 0) 점검 - MEM > 256, 배포판 == CentOS
+    - name: 0.1) 점검 - MEM 용량, 배포판 종류
+      ansible.builtin.fail:
+        msg: "메모리가 256MB 보다 작거나 배포판 종류가 CentOS가 아닙니다."
+      when: >
+        ansible_memfree_mb < min_ram_mb or
+        ansible_distribution != "CentOS"
+
+    - name: 0.2) 점검 - 배포판 버전 점검
+      ansible.builtin.debug:
+        msg: "CentOS Stream 9버전에서만 동작합니다."
+      failed_when: ansible_distribution_version != "9"
+
+    # 1) 패키지 설치 - httpd, mod_ssl, firewalld
+    - name: 1) 패키지 설치 - {{ packages }}
+      ansible.builtin.dnf:
+        name: "{{ packages }}"
+        state: present
+
+    # 2) 서비스 기동 - httpd, firewalld
+    - name: 2) 서비스 기동 - {{ services }}
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop: "{{ services }}"
+
+    # 3) 웹 서버 설정 (notify)
+    # 3.1) /etc/pki/tls/certs/localhost.crt
+    # 3.2) /etc/pki/tls/private/localhost.key
+    # 3.3) /var/www/html/index.html
+    - name: Block ~ Rescue
+      block:
+        - name: 3) 웹 서버 설정
+          ansible.builtin.copy:
+            src: "{{ item.src }}"
+            dest: "{{ item.dest }}"
+            owner: "{{ item.owner }}"
+            group: "{{ item.group }}"
+            mode: "{{ item.mode | string }}"
+          loop: "{{ web_config_files }}"
+          notify: restart_web_service
+      rescue:
+        - name: 3) 웹 서버 설정 - 에러 메세지 출력
+          ansible.builtin.debug:
+            msg: "[ FAIL ] 웹 서버 설정이 잘못 되었습니다."
+
+    # 4) 방화벽 포트 등록
+    - name: 4) 방화벽 포트 등록
+      ansible.posix.firewalld:
+        service: "{{ item }}"
+        permanent: true
+        immediate: true
+        state: enabled
+      loop: "{{ firewall_rule }}"
+
+  # 5) handlers 정의
+  handlers:
+    - name: restart_web_service
+      ansible.builtin.systemd:
+        name: "{{ web_service }}"
+        state: restarted

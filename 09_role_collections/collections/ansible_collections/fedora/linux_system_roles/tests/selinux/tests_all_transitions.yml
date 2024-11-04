@@ -1,0 +1,39 @@
+---
+- name: Test all the possible selinux_state transitions
+  hosts: all
+  tags:
+    - tests::reboot
+  vars:
+    states:
+      - permissive
+      - enforcing
+      - disabled
+
+  tasks:
+    - name: Check if test is supported
+      vars:
+        ostree_booted_file: /run/ostree-booted
+      block:
+        - name: Check if system is ostree
+          stat:
+            path: "{{ ostree_booted_file }}"
+          register: __ostree_booted_stat
+
+        - name: Skip if not supported
+          meta: end_host
+          when: __ostree_booted_stat.stat.exists
+
+    - name: Save config
+      include_tasks: selinux_config_save.yml
+
+    - name: Test all the possible state transitions
+      include_tasks: selinux_test_transitions.yml
+      vars:
+        selinux_initial_state: "{{ item.0 }}"
+        selinux_desired_state: "{{ item.1 }}"
+      with_nested:
+        - "{{ states }}"
+        - "{{ states }}"
+
+    - name: Restore config
+      include_tasks: selinux_config_restore.yml

@@ -1,0 +1,6 @@
+{{ ansible_managed | comment }}
+{{ "system_role:keylime_server" | comment(prefix="", postfix="") }}
+
+[verifier]
+# Database URL Configuration.
+database_url = {{ keylime_server_verifier_database_url }}

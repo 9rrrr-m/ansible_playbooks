@@ -1,0 +1,58 @@
+---
+# ---------------------------------------- #
+# 0) .htaccess 파일 사용하는 웹서버 복구
+# 1) 방화벽 서비스 제거
+# 2) 서비스 중지
+# 3) 서비스 설정 파일 삭제
+# 3.1) /var/www/html/.htaccess, /var/www/html/index.html
+# 3.2) /etc/httpd/secrets/htpasswd
+# 4) 패키지 삭제
+# ---------------------------------------- #
+
+# 0) .htaccess 파일 사용하는 웹서버 복구
+- name: 0) .htaccess 파일 사용하는 웹서버 복구
+  hosts: ansible1.example.com
+  vars_files:
+    - vars/vars.yml
+  tasks:
+    # 1) 방화벽 서비스 제거
+    - name: 1) 방화벽 서비스 제거 - http, https
+      ansible.posix.firewalld:
+        service: "{{ item }}"
+        permanent: true
+        immediate: true
+        state: disabled
+      loop:
+        - http
+        - https
+
+    # 2) 서비스 중지
+    - name: 2) 서비스 중지 - {{ web_svc }}, {{ firewall_svc }}
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - "{{ web_svc }}"
+        - "{{ firewall_svc }}"
+
+    # 3) 서비스 설정 파일 삭제
+    # 3.1) /var/www/html/.htaccess, /var/www/html/index.html
+    - name: 3) 서비스 설정 파일 삭제 - {{ web_root }}/{.htaccess,index.html}
+      ansible.builtin.file:
+        path: "{{ web_root }}"
+        state: absent
+
+    # 3.2) /etc/httpd/secrets/htpasswd
+    - name: 3) 서비스 설정 파일 삭제 - {{ secrets_dest }}
+      ansible.builtin.file:
+        path: "{{ secrets_dest }}"
+        state: absent
+
+    # 4) 패키지 삭제
+    - name: 4) 패키지 삭제 - {{ web_pkg }}, {{ ssl_pkg }}
+      ansible.builtin.dnf:
+        name:
+          - "{{ web_pkg }}"
+          - "{{ ssl_pkg }}"
+        state: absent

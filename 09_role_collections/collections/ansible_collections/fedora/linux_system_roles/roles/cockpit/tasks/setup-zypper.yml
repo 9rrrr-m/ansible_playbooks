@@ -1,0 +1,33 @@
+---
+- name: If choosing custom package set, ensure minimal cockpit is included
+  set_fact:
+    cockpit_packages: "{{ cockpit_packages + __cockpit_packages_minimal if cockpit_packages not in __cockpit_package_types else cockpit_packages }}"
+  when: cockpit_packages is defined
+
+- name: Ensure Cockpit Web Console packages are installed.
+  community.general.zypper:
+    name: "{{ __cockpit_packages[cockpit_packages] if cockpit_packages in __cockpit_package_types else cockpit_packages }}"
+    state: present
+  register: cockpit_package_result
+
+- name: Handle reboot for transactional update systems
+  when:
+    - __cockpit_is_transactional | d(false)
+    - cockpit_package_result is changed
+  block:
+    - name: Notify user that reboot is needed to apply changes
+      debug:
+        msg: >
+          Reboot required to apply changes due to transactional updates.
+
+    - name: Reboot transactional update systems
+      reboot:
+        msg: Rebooting the system to apply transactional update changes.
+      when: cockpit_transactional_update_reboot_ok | bool
+
+    - name: Fail if reboot is needed and not set
+      fail:
+        msg: >
+          Reboot is required but not allowed. Please set 'cockpit_transactional_update_reboot_ok' to proceed.
+      when:
+        - cockpit_transactional_update_reboot_ok is none

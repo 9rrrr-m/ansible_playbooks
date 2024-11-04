@@ -1,0 +1,9 @@
+---
+- name: 0) 모듈 테스트 - fetch
+  hosts: all
+  tasks:
+    - name: 로그 파일 수집 - /var/log/secure
+      ansible.builtin.fetch:
+        src: /var/log/secure
+        dest: secure-backups
+        flat: false

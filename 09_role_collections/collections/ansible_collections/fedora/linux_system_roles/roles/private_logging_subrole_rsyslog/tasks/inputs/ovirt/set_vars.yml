@@ -1,0 +1,17 @@
+---
+# SPDX-License-Identifier: GPL-3.0-only
+
+- name: Ensure ansible_facts used by role
+  setup:
+    gather_subset: "{{ __logging_required_facts_subsets }}"
+  when: __logging_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Set platform/version specific variables
+  include_vars: "{{ item }}"
+  loop:
+    - "{{ role_path }}/vars/inputs/ovirt/default.yml"
+    - "{{ role_path }}/vars/inputs/ovirt/{{ ansible_facts['os_family'] }}.yml"
+    - "{{ role_path }}/vars/inputs/ovirt/{{ ansible_facts['distribution'] }}.yml"
+    - "{{ role_path }}/vars/inputs/ovirt/{{ ansible_facts['distribution'] }}_{{ ansible_facts['distribution_major_version'] }}.yml"
+    - "{{ role_path }}/vars/inputs/ovirt/{{ ansible_facts['distribution'] }}_{{ ansible_facts['distribution_version'] }}.yml"
+  when: item is file

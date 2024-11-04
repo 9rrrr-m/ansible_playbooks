@@ -1,0 +1,53 @@
+---
+- name: 0) 웹 서버 설정
+  hosts: web1.example.com
+  tasks:
+    # ----------------------------------------------- #
+    # 1) 패키지 설치 - httpd, firewalld
+    # 2) 웹서버 설정 - /var/www/html/index.html
+    # 3) 서비스 기동 - httpd.service, firewalld.service
+    # 4) 방화벽 등록 - http
+    # ----------------------------------------------- #
+    - name: 1) 패키지 설치 - (dnf) httpd, firewalld
+      ansible.builtin.dnf:
+        name:
+          - httpd
+          - firewalld
+        state: present
+
+    - name: 2) 웹서버 설정 - (copy) /var/www/html/index.html
+      ansible.builtin.copy:
+        content: "Web1 Server Page\n"
+        dest: /var/www/html/index.html
+        owner: apache
+        group: apache
+        mode: '0400'
+
+    - name: 3) 서비스 기동 - (systemd) httpd.service
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: 3) 서비스 기동 - (systemd) firewalld.service
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: 4) 방화벽 등록 - http
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        immediate: true
+        state: enabled
+
+- name: 웹 요청 테스트
+  hosts: localhost
+  become: false
+  tasks:
+    - name: 1) web1.example.com으로 웹 요청
+      ansible.builtin.uri:
+        url: http://web1.example.com
+        return_content: true
+        status_code: 200

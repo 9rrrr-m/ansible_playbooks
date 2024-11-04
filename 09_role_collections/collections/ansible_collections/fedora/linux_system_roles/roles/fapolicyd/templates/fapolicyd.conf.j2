@@ -1,0 +1,32 @@
+{{ ansible_managed | comment }}
+{{ "system_role:fapolicyd" | comment(prefix="", postfix="") }}
+#
+# This file controls the configuration of the file access policy daemon.
+# See the fapolicyd.conf man page for explanation.
+#
+
+permissive = {{ fapolicyd_setup_permissive | ternary("1", "0") }}
+nice_val = 14
+q_size = 800
+uid = fapolicyd
+gid = fapolicyd
+do_stat_report = 1
+detailed_report = 1
+db_max_size = 50
+subj_cache_size = 1549
+obj_cache_size = 8191
+{% if __fapolicyd_watch_fs_supported %}
+watch_fs = ext2,ext3,ext4,tmpfs,xfs,vfat,iso9660,btrfs
+{% endif %}
+
+{% if fapolicyd_setup_trust | length > 0 %}
+trust = {{ fapolicyd_setup_trust }}
+{% endif %}
+
+{% if __fapolicyd_syslog_format_supported %}
+syslog_format = rule,dec,perm,auid,pid,exe,:,path,ftype,trust
+{% endif %}
+
+{% if fapolicyd_setup_integrity | length > 0 %}
+integrity = {{ fapolicyd_setup_integrity }}
+{% endif %}

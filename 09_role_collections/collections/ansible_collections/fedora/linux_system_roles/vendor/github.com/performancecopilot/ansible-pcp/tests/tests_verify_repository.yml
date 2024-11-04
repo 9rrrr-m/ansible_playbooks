@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Ensure that the repository role runs
+  hosts: all
+
+  roles:
+    - role: performancecopilot.metrics.repository
+    - role: performancecopilot.metrics.pcp
+
+  pre_tasks:
+    - name: Save state of services
+      import_tasks: get_services_state.yml
+
+  tasks:
+    - name: Check if pcp role setup still works
+      include_tasks: "{{ item }}"
+      loop:
+        - check_pcp.yml
+        - check_pmie.yml
+        - check_pmlogger.yml
+
+    - name: Check headers for ansible_managed, fingerprint
+      include_tasks: check_header.yml
+      vars:
+        __fingerprint: "performancecopilot:ansible-pcp"
+        __file: /etc/yum.repos.d/performancecopilot.repo
+      when: ansible_facts["os_family"] == "RedHat"
+
+  post_tasks:
+    - name: Restore state of services
+      import_tasks: restore_services_state.yml

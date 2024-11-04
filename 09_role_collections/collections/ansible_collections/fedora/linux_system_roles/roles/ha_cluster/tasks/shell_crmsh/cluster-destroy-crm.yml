@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Get stat of cluster configuration files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/corosync/corosync.conf
+    - /var/lib/pacemaker/cib/cib.xml
+  register: __ha_cluster_config_files_stat
+
+- name: Stop cluster
+  ansible.builtin.command:
+    cmd: crm cluster stop
+  when: not __ha_cluster_config_files_stat.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
+  changed_when: true
+
+- name: Populate service facts
+  ansible.builtin.service_facts:
+
+# Conditional added to skip qdevice in case qdevice was not configured
+- name: Stop cluster daemons
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped # noqa no-handler
+  loop:
+    - pacemaker.service
+    - corosync.service
+    - corosync-qdevice.service
+  when: item in ansible_facts.services
+
+- name: Backup configuration files by renaming to _backup
+  ansible.builtin.copy:
+    src: "{{ config_file.item }}"
+    dest: "/root/{{ config_file.stat.path | basename }}_backup"
+    owner: root
+    group: root
+    mode: '0600'
+    remote_src: true
+    backup: true
+  loop: "{{ __ha_cluster_config_files_stat.results }}"
+  loop_control:
+    loop_var: config_file
+  when: config_file.stat.exists
+
+- name: Remove cluster configuration files
+  ansible.builtin.file:
+    path: "{{ config_file.item }}"
+    state: absent
+  loop: "{{ __ha_cluster_config_files_stat.results }}"
+  loop_control:
+    loop_var: config_file
+  when: config_file.stat.exists
+
+- name: Remove all files in /var/lib/pacemaker/cib/
+  ansible.builtin.shell:
+    cmd: 'rm -f /var/lib/pacemaker/cib/{cib*,shadow*}'
+  changed_when: true

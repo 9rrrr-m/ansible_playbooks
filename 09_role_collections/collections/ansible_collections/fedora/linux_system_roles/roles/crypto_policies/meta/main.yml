@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MIT
+---
+galaxy_info:
+  author: Jakub Jelen <jjelen@redhat.com>
+  description: This Ansible role manages system-wide crypto policies.
+  company: Red Hat, Inc.
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Fedora
+      versions:
+        - all
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+  galaxy_tags:
+    - bind
+    - crypto
+    - el8
+    - el9
+    - el10
+    - fedora
+    - gnutls
+    - java
+    - kerberos
+    - krb5
+    - libssh
+    - networking
+    - nss
+    - openssh
+    - openssl
+    - redhat
+    - security
+    - ssh
+    - system
+    - tls
+dependencies: []

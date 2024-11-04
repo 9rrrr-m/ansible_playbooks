@@ -1,0 +1,9 @@
+{{ ansible_managed | comment }}
+{{ "system_role:keylime_server" | comment(prefix="", postfix="") }}
+
+[verifier]
+ip = {{ keylime_server_verifier_ip }}
+port = {{ keylime_server_verifier_port }}
+
+registrar_ip = {{ keylime_server_registrar_ip }}
+registrar_port = {{ keylime_server_registrar_port }}

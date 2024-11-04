@@ -1,0 +1,25 @@
+---
+# tasks file for roles/myfirewall
+# ---------------------------------------- #
+# 2.0) 방화벽 설정 - dependencies => firewall role
+# 2.0.1) 방화벽 패키지 설치
+# 2.0.2) 방화벽 서비스 기동
+# ---------------------------------------- #
+- name: 2.0.1) 방화벽 패키지 설치
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+
+- name: 2.0.2) 방화벽 서비스 기동
+  ansible.builtin.systemd:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: 2.0.3) 방화벽 포트 등록
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ web_rules }}"

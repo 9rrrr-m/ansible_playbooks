@@ -1,0 +1,280 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Test various aspects of authentication and security settings
+  hosts: all
+  vars_files:
+    - vars/test_vars.yml
+  vars:
+    __podman_test_username: podman_username
+    local_test_image: "{{ podman_local_test_images[0] }}"
+    podman_quadlet_spec_base:
+      name: auth_test_1_quadlet
+      type: container
+      state: created
+      activate_systemd_unit: false
+      Install:
+        WantedBy: default.target
+      Container:
+        Image: "{{ local_test_image }}"
+        ContainerName: auth_test_1_quadlet
+    podman_kube_spec_base:
+      state: started
+      kube_file_content:
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          labels:
+            app: test
+            io.containers.autoupdate: registry
+          name: auth_test_1_kube
+        spec:
+          containers:
+            - name: auth_test_1_kube
+              image: "{{ local_test_image }}"
+    __test_creds:
+      registry_username: "{{ __podman_test_username }}"
+      registry_password: "{{ __podman_test_password }}"
+    podman_quadlet_spec_creds: "{{ podman_quadlet_spec_base | combine(__test_creds) }}"
+    podman_kube_spec_creds: "{{ podman_kube_spec_base | combine(__test_creds) }}"
+  tasks:
+    - name: Run the role with no config to install podman
+      include_role:
+        name: fedora.linux_system_roles.podman
+
+    - name: Setup registry
+      include_tasks: tasks/setup_registry.yml
+      vars:
+        __podman_test_images:
+          - "{{ test_image }}"
+
+    - name: Run the role with no credentials and no cert checking
+      block:
+        - name: Run the role with no credentials and no cert checking
+          include_role:
+            name: fedora.linux_system_roles.podman
+          vars:
+            podman_validate_certs: false
+            podman_quadlet_specs:
+              - "{{ podman_quadlet_spec_base }}"
+            podman_kube_specs:
+              - "{{ podman_kube_spec_base }}"
+
+        - name: Should not get here
+          fail:
+            msg: UNREACHABLE
+
+      rescue:
+        - name: Check error
+          fail:
+            msg: >-
+              Role did not fail with the expected message {{ expected_msg }} but
+              instead failed with {{ ansible_failed_result | to_nice_json }}
+          when: not expected_msg in ansible_failed_result.results[0].msg | d("")
+          vars:
+            expected_msg: Failed to pull image
+
+    - name: Run the role with credentials and cert checking
+      block:
+        - name: Run the role with credentials and cert checking
+          include_role:
+            name: fedora.linux_system_roles.podman
+          vars:
+            podman_validate_certs: true
+            podman_quadlet_specs:
+              - "{{ podman_quadlet_spec_creds }}"
+            podman_kube_specs:
+              - "{{ podman_kube_spec_creds }}"
+
+        - name: Should not get here
+          fail:
+            msg: UNREACHABLE
+
+      rescue:
+        - name: Check error
+          fail:
+            msg: >-
+              Role did not fail with the expected message {{ expected_msg }} but
+              instead failed with {{ ansible_failed_result | to_nice_json }}
+          when: not expected_msg in ansible_failed_result.results[0].msg | d("")
+          vars:
+            expected_msg: Failed to pull image
+
+    - name: Run remaining tasks in block with cleanup
+      block:
+        - name: Create a local tmpdir
+          tempfile:
+            prefix: lsr_
+            suffix: _podman
+            state: directory
+          register: __local_tmpdir
+          delegate_to: localhost
+
+        - name: Run the role with credentials in spec and CA cert
+          include_role:
+            name: fedora.linux_system_roles.podman
+          vars:
+            podman_registry_username: bogus
+            podman_registry_password: bogus
+            podman_quadlet_specs:
+              - "{{ podman_quadlet_spec_creds }}"
+            podman_kube_specs:
+              - "{{ podman_kube_spec_creds }}"
+            podman_registry_certificates:
+              - registry_host: localhost:5000
+                ca_cert_content: "{{ certificate_test_certs['podman_registry']['ca_content'] }}"
+
+        - name: Run the role with credentials in global vars
+          include_role:
+            name: fedora.linux_system_roles.podman
+          vars:
+            podman_registry_username: "{{ __podman_test_username }}"
+            podman_registry_password: "{{ __podman_test_password }}"
+            podman_quadlet_specs:
+              - "{{ podman_quadlet_spec_base }}"
+            podman_kube_specs:
+              - "{{ podman_kube_spec_base }}"
+
+        - name: Get authfile locally
+          fetch:
+            src: "{{ __podman_test_authfile }}"
+            dest: "{{ __local_tmpdir.path ~ '/' }}"
+            flat: true
+
+        - name: Provide a credentials file - root
+          include_role:
+            name: fedora.linux_system_roles.podman
+          vars:
+            podman_credential_files:
+              - file_src: "{{ __local_tmpdir.path ~ '/auth.json' }}"
+                file: /root/.config/containers/auth.json
+            podman_quadlet_specs:
+              - "{{ podman_quadlet_spec_base }}"
+            podman_kube_specs:
+              - "{{ podman_kube_spec_base }}"
+
+        - name: Remove all container resources - root
+          include_role:
+            name: fedora.linux_system_roles.podman
+          vars:
+            podman_kube_specs:
+              - "{{ podman_kube_spec_base | combine({'state': 'absent'}) }}"
+            podman_quadlet_specs:
+              - "{{ podman_quadlet_spec_base | combine({'state': 'absent'}) }}"
+            podman_credential_files:
+              - state: absent
+            podman_registry_certificates:
+              - registry_host: localhost:5000
+                state: absent
+
+        - name: Create a user for rootless
+          user:
+            name: auth_test_user1
+            uid: 2001
+
+        - name: Provide a credentials file - rootless
+          include_role:
+            name: fedora.linux_system_roles.podman
+          vars:
+            podman_credential_files:
+              - template_src: "{{ __local_tmpdir.path ~ '/auth.json' }}"
+                run_as_user: auth_test_user1
+            __run_as_user:
+              run_as_user: auth_test_user1
+            podman_quadlet_specs:
+              - "{{ podman_quadlet_spec_base | combine(__run_as_user) }}"
+            podman_kube_specs:
+              - "{{ podman_kube_spec_base | combine(__run_as_user) }}"
+            podman_registry_certificates:
+              - registry_host: localhost:5000
+                run_as_user: auth_test_user1
+                ca_cert_content: "{{ certificate_test_certs['podman_registry']['ca_content'] }}"
+
+      rescue:
+        - name: Dump journal
+          command: journalctl -ex
+          changed_when: false
+          failed_when: true
+
+      always:
+        - name: Cleanup root resources
+          block:
+          # in case the test errored before this happened
+            - name: Remove all container resources - root
+              include_role:
+                name: fedora.linux_system_roles.podman
+              vars:
+                podman_kube_specs:
+                  - "{{ podman_kube_spec_base | combine({'state': 'absent'}) }}"
+                podman_quadlet_specs:
+                  - "{{ podman_quadlet_spec_base | combine({'state': 'absent'}) }}"
+                podman_credential_files:
+                  - state: absent
+                podman_registry_certificates:
+                  - registry_host: localhost:5000
+                    state: absent
+          rescue:
+            - name: Check journal for root cleanup errors
+              command: journalctl -ex
+              changed_when: false
+
+        - name: Cleanup rootless resources
+          block:
+            - name: Remove all container resources - rootless
+              include_role:
+                name: fedora.linux_system_roles.podman
+              vars:
+                podman_run_as_user: auth_test_user1
+                podman_kube_specs:
+                  - "{{ podman_kube_spec_base | combine({'state': 'absent'}) }}"
+                podman_quadlet_specs:
+                  - "{{ podman_quadlet_spec_base | combine({'state': 'absent'}) }}"
+                podman_credential_files:
+                  - state: absent
+                podman_registry_certificates:
+                  - registry_host: localhost:5000
+                    state: absent
+          rescue:
+            - name: Check journal for rootless cleanup errors
+              command: journalctl -ex
+              changed_when: false
+
+        - name: Remove test user resources
+          block:
+            - name: Remove user
+              user:
+                name: auth_test_user1
+                state: absent
+
+            - name: Remove homedir
+              file:
+                path: /home/auth_test_user1
+                state: absent
+          rescue:
+          # this usually fails when the user is still running some process
+            - name: See if any process is held by the user
+              shell: |
+                set -euxo pipefail
+                exec 1>&2
+                ps -ef | grep auth_test_user1 || :
+                ps -ef | grep 2001 || :
+              changed_when: false
+
+            - name: Check journal for user removal errors
+              command: journalctl -ex
+              changed_when: false
+
+        - name: Remove local tmpdir
+          file:
+            path: "{{ __local_tmpdir.path }}"
+            state: absent
+          delegate_to: localhost
+
+        - name: Clean up registry and other test resources
+          block:
+            - name: Clean up registry
+              include_tasks: tasks/cleanup_registry.yml
+          rescue:
+            - name: Check journal for registry cleanup errors
+              command: journalctl -ex
+              changed_when: false
+              failed_when: true

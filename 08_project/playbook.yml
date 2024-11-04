@@ -1,0 +1,44 @@
+---
+# Play 01
+- name: Play 01) 웹 서버 설정
+  hosts: webservers
+  tasks:
+    # ------------------------------------------------------ #
+    # Play 01
+    # 1) 웹 서버 패키지 설치 및 서비스 기동 - include_tasks
+    # 2) 방화벽 패키지 설치 및 서비스 기동, 포트 등록 - import_tasks
+    # 3) 웹 서버 설정(/var/www/html/index.html) - import_tasks
+    # Play 02
+    # 4) 웹 요청 - import_playbook
+    # ------------------------------------------------------ #
+
+    # 1) 웹 서버 패키지 설치 및 서비스 기동 - include_tasks
+    - name: 1) 웹 서버 패키지 설치 및 서비스 기동
+      ansible.builtin.include_tasks: tasks/web.yml
+      vars:
+        packages:
+          - httpd
+          - mod_ssl
+        service: httpd
+
+    # 2) 방화벽 패키지 설치 및 서비스 기동, 포트 등록 - import_tasks
+    - name: 2) 방화벽 패키지 설치 및 서비스 기동, 포트 등록
+      ansible.builtin.import_tasks: tasks/firewall.yml
+      vars:
+        packages: firewalld
+        service: firewalld
+        rules:
+          - http
+          - https
+
+    # 3) 웹 서버 설정(/var/www/html/index.html) - import_tasks
+    - name: 3) 웹 서버 설정(/var/www/html/index.html)
+      ansible.builtin.import_tasks: tasks/placeholder.yml
+      vars:
+        file: /var/www/html/index.html
+
+# Play 02
+- name: Play 02) 웹 요청
+  ansible.builtin.import_playbook: plays/tasks.yml
+  vars:
+    url: "http://ansible1.example.com"

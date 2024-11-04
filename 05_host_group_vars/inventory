@@ -1,0 +1,14 @@
+[webservers]
+web1
+
+[dbservers]
+web1
+
+[servers:children]
+webservers
+dbservers
+
+[servers:vars]
+ansible_user=devops
+ansible_become=true
+package=httpd

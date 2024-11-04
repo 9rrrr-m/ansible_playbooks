@@ -1,0 +1,5 @@
+[database_dev]
+ansible1.example.com
+
+[database_prod]
+ansible2.example.com

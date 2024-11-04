@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+---
+systemd_unit_files: []
+systemd_unit_file_templates: []
+systemd_dropins: []
+systemd_started_units: []
+systemd_stopped_units: []
+systemd_restarted_units: []
+systemd_reloaded_units: []
+systemd_enabled_units: []
+systemd_disabled_units: []
+systemd_masked_units: []
+systemd_unmasked_units: []
+systemd_transactional_update_reboot_ok:

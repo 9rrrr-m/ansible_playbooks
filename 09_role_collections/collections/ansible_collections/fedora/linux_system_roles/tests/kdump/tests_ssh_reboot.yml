@@ -1,0 +1,172 @@
+---
+- name: Ensure that the rule runs with ssh
+  hosts: all
+  vars:
+  # this is the outside address under which the ssh dump server is
+  # known and ansible is supposed to be configured to be able to
+  # connect to it (via inventory).
+  # Can be set to localhost if the control node is being used as the
+  # kdump target. This requires sshd to be running on the control
+  # node, though.
+  # In this case uncomment the tests::multihost_localhost tag below.
+  # Setting it to inventory_hostname uses the managed node itself as
+  # the kdump target. This makes the the test entirely single-host,
+  # but is less realistic, as in practice a host can not dump core
+  # to itself.
+    kdump_test_ssh_server_outside: "{{ inventory_hostname }}"
+    kdump_test_ssh_source: "{{ ansible_env['SSH_CONNECTION'].split()[0] if 'SSH_CONNECTION' in ansible_env else '127.0.0.1' }}"
+
+  # this is the address at which the ssh dump server can be reached
+  # from the managed host. Dumps will be uploaded there.
+    kdump_test_ssh_server_inside: >-
+      {{
+      kdump_test_ssh_source if kdump_test_ssh_source in
+      hostvars[kdump_test_ssh_server_outside]['ansible_all_ipv4_addresses']
+      + hostvars[kdump_test_ssh_server_outside]['ansible_all_ipv6_addresses']
+      else
+      hostvars[kdump_test_ssh_server_outside]['ansible_default_ipv4']['address']
+      }}
+
+  # This is the outside address. Ansible will connect to it to
+  # copy the ssh key.
+    kdump_ssh_server: "{{ kdump_test_ssh_server_outside }}"
+    kdump_path: /tmp/tests_ssh_reboot
+    kdump_target:
+      type: ssh
+    # This is the ssh dump server address visible from inside
+    # the machine being configured. Dumps are to be copied
+    # there.
+      location: "{{ kdump_ssh_user }}@{{ kdump_test_ssh_server_inside }}"
+
+    kdump_reboot_ok: true
+  tags:
+    - tests::reboot
+
+# This test may execute some tasks on localhost and rely on
+# localhost being a different host than the managed host
+# (localhost is being used as a second host in multihost
+# scenario). This would also mean that localhost would have to
+# be capable enough (not just a container - must be running a
+# sshd).
+# This applies only when kdump_test_ssh_server_outside is set to
+# localhost. In that case, uncomment the lines below and the
+# corresponding line in tests_ssh_wrapper.yml
+# tags:
+#   - 'tests::multihost_localhost'
+
+  tasks:
+    - name: Gather facts from {{ kdump_test_ssh_server_outside }}
+      setup:
+      delegate_to: "{{ kdump_test_ssh_server_outside }}"
+      delegate_facts: true
+
+    - name: Create a kdump user on kdump_ssh_server
+      user:
+        name: kdump_ssh_user
+        uid: 1189
+      register: __user_info
+      delegate_to: "{{ kdump_ssh_server }}"
+
+    - name: Set kdump_ssh_user, sshkey, auth keys
+      set_fact:
+        kdump_ssh_user: kdump_ssh_user
+        __ssh_dir: "{{ __user_info.home ~ '/.ssh' }}"
+        __authorized_keys_path: "{{ __user_info.home ~ '/.ssh/authorized_keys' }}"
+
+    - name: Print message that this test is skipped on EL 6
+      debug:
+        msg: Skipping the test on EL 6 because control node == managed node
+      when:
+        - ansible_distribution in ['CentOS','RedHat']
+        - ansible_distribution_major_version == '6'
+        - kdump_test_ssh_server_outside == inventory_hostname
+
+  # The skip is required on EL 6 because mkdumprd on EL 6 does not work when
+  # configuring ssh to localhost
+    - name: Skip the test on EL 6 when control node == managed node
+      meta: end_host
+      when:
+        - ansible_distribution in ['CentOS','RedHat']
+        - ansible_distribution_major_version == '6'
+        - kdump_test_ssh_server_outside == inventory_hostname
+
+    - name: Determine if system is ostree and set flag
+      when: not __kdump_is_ostree is defined
+      block:
+        - name: Check if system is ostree
+          stat:
+            path: /run/ostree-booted
+          register: __ostree_booted_stat
+
+        - name: Set flag to indicate system is ostree
+          set_fact:
+            __kdump_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+    - name: Skip the test on ostree systems
+      meta: end_host
+      when: __kdump_is_ostree | bool
+
+    - name: Run the role and reboot if necessary
+      include_role:
+        name: fedora.linux_system_roles.kdump
+
+    - name: Flush handlers
+      meta: flush_handlers
+
+    - name: Get the ssh dir for the user
+      stat:
+        path: "{{ __ssh_dir }}"
+      register: __ssh_dir_stat_before
+      delegate_to: "{{ kdump_ssh_server }}"
+
+    - name: Get the authorized_keys file for the user
+      stat:
+        path: "{{ __authorized_keys_path }}"
+      register: __authorized_keys_file
+      delegate_to: "{{ kdump_ssh_server }}"
+
+    - name: Get the authorized_keys contents
+      slurp:
+        src: "{{ __authorized_keys_file.stat.path }}"
+      register: __authorized_keys_before
+      delegate_to: "{{ kdump_ssh_server }}"
+
+    - name: Run the role again
+      include_role:
+        name: fedora.linux_system_roles.kdump
+
+    - name: Get the authorized_keys contents after
+      slurp:
+        src: "{{ __authorized_keys_file.stat.path }}"
+      register: __authorized_keys_after
+      delegate_to: "{{ kdump_ssh_server }}"
+
+    - name: Assert no changes to authorized_keys
+      assert:
+        that: __authorized_keys_before == __authorized_keys_after
+
+    - name: Get the ssh dir for the user after
+      stat:
+        path: "{{ __ssh_dir }}"
+      register: __ssh_dir_stat_after
+      delegate_to: "{{ kdump_ssh_server }}"
+
+    - name: Assert no changes to ssh dir
+      assert:
+        that:
+          - __ssh_dir_stat_before.stat.mode == __ssh_dir_stat_after.stat.mode
+          - __ssh_dir_stat_before.stat.uid == __ssh_dir_stat_after.stat.uid
+          - __ssh_dir_stat_before.stat.gid == __ssh_dir_stat_after.stat.gid
+
+    - name: Delete user
+      user:
+        name: "{{ kdump_ssh_user }}"
+        state: absent
+      register: __user_delete
+      until: __user_delete is success
+
+    - name: Cleanup kdump_path
+      file:
+        path: "{{ kdump_path }}"
+        state: absent
+      delegate_to: "{{ kdump_ssh_server }}"

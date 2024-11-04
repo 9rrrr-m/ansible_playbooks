@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+#
+{{ ansible_managed | comment }}
+{{ "system_role:ad_integration" | comment(prefix="", postfix="") }}
+[active-directory]
+default-client = {{ ad_integration_client_software }}
+
+[{{ ad_integration_realm | lower }}]
+automatic-id-mapping = {{ ad_integration_auto_id_mapping }}
+{% if ad_integration_computer_ou %}
+computer-ou = {{ ad_integration_computer_ou }}
+{% endif %}
+{% if ad_integration_preserve_authselect_profile %}
+[commands]
+sssd-enable-logins = /usr/bin/sh -c "/usr/bin/systemctl enable oddjobd.service && /usr/bin/systemctl start oddjobd.service"
+sssd-disable-logins = /bin/true
+{% endif %}

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+---
+# Here is the right place to put the role's input variables.
+# This file also serves as a documentation for such a variables.
+
+# Examples of role input variables:
+postgresql_version: "{{ '16' if ansible_facts['os_family'] == 'RedHat' and ansible_facts['distribution'] != 'Fedora' and ansible_facts['distribution_major_version'] == '10' else '13' }}"
+postgresql_password:
+postgresql_cert_name:
+postgresql_server_tuning: true
+postgresql_ssl_enable: false
+
+# If you want to generate the certificas in the postgresql role
+# specify the configuration like this example
+# postgresql_certificates:
+#   - name: postgresql_cert
+#     dns: ['localhost', 'www.example.com']
+#     ca: self-sign
+postgresql_certificates: []

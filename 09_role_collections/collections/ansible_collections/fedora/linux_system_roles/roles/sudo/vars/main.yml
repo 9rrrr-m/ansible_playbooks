@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+---
+__sudo_sudoers_config: /etc/sudoers
+__sudo_packages: sudo
+__sudo_services: []
+__sudo_required_facts:
+  - distribution
+  - distribution_major_version
+  - distribution_version
+  - os_family
+__sudo_required_facts_subsets: "{{ ['!all', '!min'] + __sudo_required_facts }}"

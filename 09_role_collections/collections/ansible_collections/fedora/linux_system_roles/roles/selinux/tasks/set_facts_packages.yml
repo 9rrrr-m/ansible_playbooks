@@ -1,0 +1,8 @@
+---
+- name: Ensure ansible_facts used by role
+  setup:
+    gather_subset: "{{ __selinux_required_facts_subsets }}"
+  when: __selinux_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Ensure SELinux packages
+  include_tasks: ensure_selinux_packages.yml

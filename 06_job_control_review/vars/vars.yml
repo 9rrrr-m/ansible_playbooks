@@ -1,0 +1,29 @@
+min_ram_mb: 256
+packages: 
+  - httpd
+  - mod_ssl
+  - firewalld
+services:
+  - httpd
+  - firewalld
+ssl_cert_dir: /etc/pki/tls/private
+web_config_files: 
+  - src: files/localhost.crt
+    dest: /etc/pki/tls/certs/localhost.crt
+    owner: root
+    group: root
+    mode: '644'
+  - src: files/localhost.key
+    dest: /etc/pki/tls/private/localhost.key
+    owner: root
+    group: root
+    mode: '400'
+  - src: files/index.html
+    dest: /var/www/html/index.html
+    owner: root
+    group: root
+    mode: '644'
+web_service: httpd
+firewall_rule:
+  - http
+  - https

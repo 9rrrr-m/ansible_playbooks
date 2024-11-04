@@ -1,0 +1,29 @@
+---
+- name: 0) DB 서비스 기동 - loop 테스트
+  hosts: database_prod
+  gather_facts: true
+  vars:
+    mariadb_packages:
+      - mariadb-server
+      - python3-PyMySQL
+    db_svc: mariadb
+  tasks:
+    # ---------------------------------------------- #
+    # 1) 패키지 설치 - mariadb-server, python3-PyMySQL
+    # 2) 서비스 기동 - mariadb
+    # ---------------------------------------------- #
+
+    # 1) 패키지 설치 - mariadb-server, python3-PyMySQL
+    - name: 1) 패키지 설치 - mariadb-server, python3-PyMySQL
+      ansible.builtin.dnf:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ mariadb_packages }}"
+      when: ansible_distribution == 'RedHat'
+
+    # 2) 서비스 기동 - mariadb
+    - name: 2) 서비스 기동 - {{ db_svc }}
+      systemd:
+        name: "{{ db_svc }}"
+        state: started
+        enabled: true

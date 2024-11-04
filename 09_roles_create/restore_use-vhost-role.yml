@@ -1,0 +1,37 @@
+---
+# --------------------------------------- #
+# 1) (debug) 시작 메세지 출력
+# 2) (include_role) 서버 복원 작업
+# 2.1) 방화벽 포트 제거
+#  - http
+#  - https
+# 2.2) 서비스 종료
+#  - httpd
+#  - firewalld
+# 2.3) 웹 서비스 설정 삭제
+#  - /etc/httpd/conf.d/vhost.conf
+#  - /var/www/html/index.html
+#  - /var/www/vhosts
+# 2.4) 패키지 삭제
+#  - httpd
+#  - mod_ssl
+# 3) (debug) 끝 메세지 출력
+# --------------------------------------- #
+- name: 0) Restore use-vhost-role.yml
+  hosts: webservers
+  gather_facts: true
+  tasks:
+    # 1) (debug) 시작 메세지 출력
+    - name: 1) 시작 메세지 출력
+      ansible.builtin.debug:
+        msg: "서버 복원 시작"
+
+    # 2) (include_role) 서버 복원 작업
+    - name: 2) 서버 복원 작업
+      ansible.builtin.include_role:
+        name: rollback_playbook
+
+    # 3) (debug) 끝 메세지 출력
+    - name: 3) 끝 메세지 출력
+      ansible.builtin.debug:
+        msg: "서버 복원 끝"

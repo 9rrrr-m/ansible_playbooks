@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Test qdevice - tls and KAPTB options
+  hosts: all
+  vars_files: vars/main.yml
+  vars:
+    _required_capability: corosync.quorum.device.model.net.options_tls_and_kaptb
+
+  tasks:
+    - name: Set qnetd address
+      set_fact:
+        __test_qnetd_address: "{{ (ansible_play_hosts_all | length == 1) | ternary('localhost', ansible_play_hosts[0]) }}"
+
+    - name: Determine if system is ostree and set flag
+      when: not __ha_cluster_is_ostree is defined
+      block:
+        - name: Check if system is ostree
+          stat:
+            path: /run/ostree-booted
+          register: __ostree_booted_stat
+
+        - name: Set flag to indicate system is ostree
+          set_fact:
+            __ha_cluster_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+  # Install pcs so we can detect whether it supports tls and kaptb options
+    - name: Install pcs
+      package:
+        name: pcs
+        state: present
+        use: "{{ (__ha_cluster_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+
+    - name: Fetch versions of cluster components
+      include_tasks: tasks/fetch_versions.yml
+
+    - name: Run test
+      tags: tests::verify
+      include_tasks: template_qdevice.yml
+      when:
+        - _required_capability in __test_pcs_capabilities
+      vars:
+        ha_cluster_quorum:
+          device:
+            model: net
+            model_options:
+              - name: host
+                value: "{{ __test_qnetd_address }}"
+              - name: algorithm
+                value: lms
+              - name: tls
+                value: required
+              - name: keep_active_partition_tie_breaker
+                value: "on"
+        __test_expected_lines:
+          - "totem {"
+          - "    version: 2"
+          - "    cluster_name: {{ ha_cluster_cluster_name }}"
+          - "    transport: knet"
+          - "    crypto_cipher: aes256"
+          - "    crypto_hash: sha256"
+          - "}"
+          - "nodelist {"
+          - "}"
+          - "quorum {"
+          - "    provider: corosync_votequorum"
+          - "    device {"
+          - "        model: net"
+          - "        net {"
+          - "            algorithm: lms"
+          - "            host: {{ __test_qnetd_address }}"
+          - "            keep_active_partition_tie_breaker: on"
+          - "            tls: required"
+          - "        }"
+          - "    }"
+          - "}"
+          - "logging {"
+          - "    to_logfile: yes"
+          - "    logfile: /var/log/cluster/corosync.log"
+          - "    to_syslog: yes"
+          - "    timestamp: on"
+          - "}"
+
+    - name: Warn about skipped test
+      debug:
+        msg: This test needs pcs with {{ _required_capability }} capability
+      when:
+        - _required_capability not in __test_pcs_capabilities

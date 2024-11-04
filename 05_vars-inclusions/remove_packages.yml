@@ -1,0 +1,6 @@
+---
+# Tasks
+- name: "{{ packages.web_pkg }} 삭제"
+  ansible.builtin.dnf:
+    name: "{{ packages.web_pkg }}"
+    state: absent

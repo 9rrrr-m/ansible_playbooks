@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Ensure that basic features of role work correctly
+  hosts: all
+  roles:
+    - fedora.linux_system_roles.systemd
+  tasks:
+    - name: Print units facts
+      debug:
+        msg: "{{ systemd_units }}"
+
+    - name: Check that unit state object has required fields
+      assert:
+        that:
+          - >-
+            ansible_facts["systemd_units"]
+            ["sshd.service"]
+            ["name"] == "sshd.service"
+          - >-
+            ansible_facts["systemd_units"]
+            ["sshd.service"]
+            ["active_state"] == "active"
+
+          - >-
+            ansible_facts["systemd_units"]
+            ["sshd.service"]
+            ["sub_state"] == "running"
+
+          - >-
+            ansible_facts["systemd_units"]
+            ["sshd.service"]
+            ["load_state"] == "loaded"
+
+          - >-
+            ansible_facts["systemd_units"]
+            ["sshd.service"]
+            ["description"] | length > 0

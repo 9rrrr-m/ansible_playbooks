@@ -1,0 +1,127 @@
+---
+# When using either nbde_server_fetch_keys or nbde_server_deploy_keys,
+# nbde_server_keys_dir needs to be set using an absolute path.
+
+- name: Test nbde_server_keys_dir is properly set
+  hosts: all
+
+  tasks:
+    - name: Test 1 - only nbde_server_fetch_keys set
+      block:
+        - name: With nbde_server_fetch_keys
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_fetch_keys: true
+
+        - name: Unreachable task
+          fail:
+            msg: UNREACH
+
+      rescue:
+        - name: Check for error with nbde_server_keys_dir not set
+          assert:
+            that: ansible_failed_result.msg != 'UNREACH'
+
+      always:
+        - name: Cleanup
+          tags: tests::cleanup
+          include_tasks: tasks/cleanup.yml
+
+    - name: Test 2 - only nbde_server_deploy_keys set
+      block:
+        - name: With nbde_server_deploy_keys
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_deploy_keys: true
+
+        - name: Unreachable task
+          fail:
+            msg: UNREACH
+
+      rescue:
+        - name: Check for error with nbde_server_keys_dir not set
+          assert:
+            that: ansible_failed_result.msg != 'UNREACH'
+
+      always:
+        - name: Cleanup
+          tags: tests::cleanup
+          include_tasks: tasks/cleanup.yml
+
+    - name: Test 3 - nbde_server_fetch_keys and nbde_server_deploy_keys set
+      block:
+        - name: With nbde_server_fetch_keys and deploy keys
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_fetch_keys: true
+            nbde_server_deploy_keys: true
+
+        - name: Unreachable task
+          fail:
+            msg: UNREACH
+
+      rescue:
+        - name: Check for error with nbde_server_keys_dir not set
+          assert:
+            that: ansible_failed_result.msg != 'UNREACH'
+
+      always:
+        - name: Cleanup
+          tags: tests::cleanup
+          include_tasks: tasks/cleanup.yml
+
+    - name: Test 4 - nbde_server_keys_dir is absolute path
+      block:
+        - name: Directory starting with ./
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_fetch_keys: true
+            nbde_server_keys_dir: ./foobar
+
+        - name: Unreachable task
+          fail:
+            msg: UNREACH
+
+      rescue:
+        - name: Check for error with nbde_server_keys_dir not an absolute path
+          assert:
+            that: ansible_failed_result.msg != 'UNREACH'
+
+      always:
+        - name: Cleanup
+          tags: tests::cleanup
+          include_tasks: tasks/cleanup.yml
+
+    - name: Test 5 - nbde_server_keys_dir is absolute path
+      block:
+        - name: Directory without leading ./
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_fetch_keys: true
+            nbde_server_keys_dir: foobar
+
+        - name: Unreachable task
+          fail:
+            msg: UNREACH
+
+      rescue:
+        - name: Check for error with nbde_server_keys_dir not an absolute path
+          assert:
+            that: ansible_failed_result.msg != 'UNREACH'
+
+      always:
+        - name: Cleanup
+          tags: tests::cleanup
+          include_tasks: tasks/cleanup.yml
+
+# vim:set ts=2 sw=2 et:

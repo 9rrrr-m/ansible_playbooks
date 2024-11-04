@@ -1,0 +1,45 @@
+---
+- name: 0) 웹서버 설정 Install and start Apache HTTPD
+  hosts: webservers
+  tasks:
+    # ----------------------------------------------- #
+    # 1) 패키지 설치 - httpd, firewalld
+    # 2) 웹서버 설정 - /var/www/html/index.html
+    # 3) 웹서버 기동 - httpd.service, firewalld.service
+    # 4) 방화벽 등록 - http
+    # 5) SELinux (?)
+    # ----------------------------------------------- #
+    - name: 1) 패키지 설치 - (yum, dnf) httpd, firewalld
+      ansible.builtin.yum:
+        # yum -y install httpd firewalld
+        name:
+          - httpd
+          - firewalld
+        state: present
+
+    - name: 2) 웹서버 설정 - (copy) /var/www/html/index.html
+      ansible.builtin.copy:
+        # scp files/index.html HOST:/var/www/html/index.html
+        src: files/index.html
+        dest: /var/www/html/index.html
+        mode: '0644'
+
+    - name: 3) 웹 서비스 기동 - (service, systemd) httpd.service
+      ansible.builtin.service:
+        # systemctl enable --now httpd
+        name: httpd
+        state: started
+        enabled: true
+    - name: 3) 웹 서비스 기동 - (service, systemd) firewalld.service
+      ansible.builtin.service:
+        # systemctl enable --now firewalld
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: 4) 방화벽에 등록 - (firewalld) http
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        immediate: true
+        state: enabled

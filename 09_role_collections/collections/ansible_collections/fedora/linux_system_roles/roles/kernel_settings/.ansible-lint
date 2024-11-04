@@ -1,0 +1,26 @@
+---
+profile: production
+kinds:
+  - yaml: "**/meta/collection-requirements.yml"
+  - playbook: "**/tests/get_coverage.yml"
+  - yaml: "**/tests/collection-requirements.yml"
+  - playbook: "**/tests/tests_*.yml"
+  - playbook: "**/tests/setup-snapshot.yml"
+  - tasks: "**/tests/*.yml"
+  - playbook: "**/tests/playbooks/*.yml"
+  - tasks: "**/tests/tasks/*.yml"
+  - tasks: "**/tests/tasks/*/*.yml"
+  - vars: "**/tests/vars/*.yml"
+  - playbook: "**/examples/*.yml"
+skip_list:
+  - fqcn-builtins
+  - var-naming[no-role-prefix]
+exclude_paths:
+  - tests/kernel_settings/roles/
+  - roles/kernel_settings/.github/
+  - roles/kernel_settings/.markdownlint.yaml
+  - roles/kernel_settings/examples/roles/
+mock_roles:
+  - linux-system-roles.kernel_settings
+supported_ansible_also:
+  - "2.14.0"

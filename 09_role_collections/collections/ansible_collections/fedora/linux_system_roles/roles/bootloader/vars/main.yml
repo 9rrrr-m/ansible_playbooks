@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+---
+# ansible_facts required by the role
+__bootloader_required_facts:
+  - architecture
+  - distribution
+  - distribution_major_version
+  - distribution_version
+  - os_family
+# the subsets of ansible_facts that need to be gathered in case any of the
+# facts in required_facts is missing; see the documentation of
+# the 'gather_subset' parameter of the 'setup' module
+__bootloader_required_facts_subsets: "{{ ['!all', '!min'] + __bootloader_required_facts }}"
+__bootloader_packages:
+  - grubby
+__bootloader_default_grub: /etc/default/grub
+__bootloader_uefi_conf_dir: >-
+  {%- if ansible_os_family == 'RedHat' -%}
+  /boot/efi/EFI/{{ ansible_distribution | lower }}/
+  {%- elif ansible_os_family == 'Suse' -%}
+  /boot/efi/EFI/BOOT/
+  {%- endif -%}
+__bootloader_bios_conf_dir: /boot/grub2/

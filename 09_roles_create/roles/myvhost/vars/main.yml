@@ -1,0 +1,5 @@
+---
+# vars file for roles/myvhost
+web_packages:
+  - httpd
+  - mod_ssl

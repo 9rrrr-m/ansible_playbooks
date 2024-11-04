@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MIT
+# This task configures test systems for testing in the CI environment.
+# Only use this task for testing.
+# This task file resides in `tasks/` so that it can be used from other roles
+# with `include_role` with `tasks_from: filename` directly without the need to
+# provide a relative path. Providing relative path is problematic with
+# collections.
+---
+- name: Set node name to 'localhost' for single-node clusters
+  set_fact:
+    inventory_hostname: localhost # noqa: var-naming
+  when: ansible_play_hosts_all | length == 1
+
+- name: Ensure facts used by tests
+  setup:
+    gather_subset: min
+  when: "'distribution' not in ansible_facts"
+
+- name: Determine if system is ostree and set flag
+  when: not __ha_cluster_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __ha_cluster_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+# Test systems may not have repositories available through subscriptions
+- name: Do not try to enable RHEL repositories
+  set_fact:
+    ha_cluster_enable_repos: false
+  when:
+    - ansible_distribution == 'RedHat'
+
+# HACK - test systems build ostree images with /usr/lib/passwd
+# have to copy hacluster user to /etc/passwd
+# also coroqnetd user for nss db ownership
+- name: >-
+    Copy nss-altfiles ha_cluster users to /etc/passwd
+  shell: |
+    for username in hacluster coroqnetd; do
+      if ! grep -q "^$username" /etc/passwd && \
+        grep -q "^$username" /usr/lib/passwd; then
+          grep "^$username" /usr/lib/passwd >> /etc/passwd
+      fi
+    done
+  when: __ha_cluster_is_ostree | d(false)
+  changed_when: true

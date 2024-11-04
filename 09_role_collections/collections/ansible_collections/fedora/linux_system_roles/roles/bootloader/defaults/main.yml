@@ -1,0 +1,10 @@
+---
+bootloader_settings: []
+bootloader_timeout: 5
+
+bootloader_password:
+bootloader_remove_password: false
+
+bootloader_reboot_ok: false
+
+bootloader_gather_facts: false

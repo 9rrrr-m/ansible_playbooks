@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Ensure ansible_facts used by role
+  setup:
+    gather_subset: "{{ __rhc_required_fact_subsets }}"
+  when: __rhc_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Determine if system is ostree and set flag
+  when: not __rhc_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __rhc_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Check if insights-packages are installed
+  package_facts:
+  when:
+    - ansible_distribution == "RedHat"
+    - >-
+      rhc_insights.state | d("present") == "absent"
+      or rhc_state | d("present") in ["absent", "reconnect"]
+      or rhc_insights.remediation | d("present") == "absent"

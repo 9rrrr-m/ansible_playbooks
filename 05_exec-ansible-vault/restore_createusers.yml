@@ -1,0 +1,14 @@
+---
+- name: Restore createusers.yml
+  hosts: devservers
+  remote_user: devops
+  become: true
+  vars_files:
+    - vars/secret.yml
+  tasks:
+    - name: Remove users from vars/secret.yml
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        state: absent
+        remove: yes
+      with_items: "{{ newusers }}"

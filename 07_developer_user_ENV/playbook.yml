@@ -1,0 +1,39 @@
+---
+- name: 0) developer user ENV setting
+  hosts: ans
+  vars_files:
+    - secret.yml
+  tasks:
+    - name: 1) 사용자 추가 - developer
+      ansible.builtin.user:
+        name: "{{ username }}"
+        password: "{{ password | password_hash('sha512') }}"
+
+    - name: 2) ssh public key 배포
+      ansible.posix.authorized_key:
+        user: developer
+        state: present
+        key: "{{ lookup('file', '/home/ansible/.ssh/id_rsa.pub') }}"
+
+    - name: 3) /etc/sudoers.d/developer 배포
+      ansible.builtin.copy:
+        src: files/developer
+        dest: /etc/sudoers.d/developer
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: 4) ~/.bashrc 배포
+      ansible.builtin.template:
+        src: templates/bashrc.j2
+        dest: /home/developer/.bashrc
+        owner: developer
+        group: developer
+        mode: '0644'
+
+    - name: 5) ble.sh 배포
+      ansible.builtin.copy:
+        src: files/blesh
+        dest: /home/developer/.local/share/
+        owner: developer
+        group: developer

@@ -1,0 +1,64 @@
+---
+- name: Verify snapshot mount action fails VG doesn't exist
+  hosts: all
+  vars:
+  # only use vgs matching this pattern
+    snapshot_lvm_vg_include: "^test_"
+    test_disk_min_size: "1g"
+    test_disk_count: 10
+    test_storage_pools:
+      - name: test_vg1
+        disks: "{{ range(0, 3) | map('extract', unused_disks) | list }}"
+        volumes:
+          - name: lv1
+            size: "50%"
+            fs_type: xfs
+  tasks:
+    - name: Run tests
+      block:
+        - name: Setup
+          include_tasks: tasks/setup.yml
+
+        - name: Create snapshot for LV
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_percent_space_required: 15
+            snapshot_lvm_all_vgs: true
+            snapshot_lvm_snapset_name: snapset1
+            snapshot_lvm_action: snapshot
+
+        - name: Test failure of verifying wrong mount
+          include_tasks: verify-role-failed.yml
+          vars:
+            __snapshot_failed_regex: source volume group does not exist:*
+            __snapshot_failed_msg: Role did not fail no VG error
+            __snapshot_failed_params:
+              snapshot_lvm_snapset_name: snapset1
+              snapshot_lvm_action: mount
+              snapshot_lvm_vg: wrong_vg
+              snapshot_lvm_lv: lv1
+              snapshot_lvm_mountpoint: "{{ test_mnt_parent ~ '/lv1_mp' }}"
+              snapshot_lvm_mountpoint_create: true
+            __snapshot_failed_changed: false
+
+        - name: Remove the snapshot LVs
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_snapset_name: snapset1
+            snapshot_lvm_all_vgs: true
+            snapshot_lvm_action: remove
+
+        - name: Use the snapshot_lvm_verify option to make sure remove is done
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_snapset_name: snapset1
+            snapshot_lvm_verify_only: true
+            snapshot_lvm_action: remove
+
+      always:
+        - name: Cleanup
+          include_tasks: tasks/cleanup.yml
+          tags: tests::cleanup

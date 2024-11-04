@@ -1,0 +1,25 @@
+---
+- name: Restore palybook.yml
+  hosts: databases
+  vars:
+    db_packages:
+      - mariadb-server
+      - python3-PyMySQL
+    db_service: mariadb
+    config_file_dst: /etc/my.cnf
+  tasks:
+    - name: 1) DB 서비스 중지
+      ansible.builtin.systemd:
+        name: "{{ db_service }}"
+        state: stopped
+        enabled: false
+
+    - name: 2) 설정 파일 삭제 - {{ config_file_dst }}
+      ansible.builtin.file:
+        path: "{{ config_file_dst }}"
+        state: absent
+
+    - name: 3) {{ db_packages }} 삭제
+      ansible.builtin.dnf:
+        name: "{{ db_packages }}"
+        state: absent

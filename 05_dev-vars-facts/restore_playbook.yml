@@ -1,0 +1,31 @@
+---
+- name: Restore playbook.yml & setup_facts.yml
+  hosts: webserver
+  vars:
+    remote_dir: /etc/ansible/facts.d
+  tasks:
+    - name: 1) Remove the service with firewall
+      ansible.posix.firewalld:
+        service: "{{ ansible_local['custom']['general']['fwsvc'] }}"
+        permanent: true
+        immediate: true
+        state: disabled
+
+    - name: 2) Stop the service
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: true
+      loop:
+        - "{{ ansible_local['custom']['general']['service'] }}"
+        - firewalld
+
+    - name: 3) Remove package
+      ansible.builtin.dnf:
+        name: "{{ ansible_local['custom']['general']['package'] }}"
+        state: absent
+
+    - name: 4) Remove the remote directory
+      ansible.builtin.file:
+        path: "{{ remote_dir }}"
+        state: absent

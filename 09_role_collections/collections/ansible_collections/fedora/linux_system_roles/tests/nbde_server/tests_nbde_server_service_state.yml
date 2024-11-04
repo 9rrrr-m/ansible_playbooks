@@ -1,0 +1,77 @@
+---
+# nbde_server_service_state can be either started or stopped. Default is
+# started. started means the server is accepting connections; stopped means
+# it is not accepting connections.
+#
+- name: Test nbde_server_service_state
+  hosts: all
+
+  tasks:
+    - name: Run tests
+      block:
+        - name: Accepting connections without specifying state
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+
+        - name: Gather state of services
+          service:
+            name: "{{ item }}"
+            enabled: true
+            state: started
+          register: nbde_server_state
+          check_mode: true
+          loop: "{{ __nbde_server_services }}"
+
+        - name: Check whether services were enabled and started
+          assert:
+            that: not item.changed
+          loop: "{{ nbde_server_state.results }}"
+
+        - name: Not accepting connections specifying state stopped
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_service_state: stopped
+
+        - name: Gather state of services
+          service:
+            name: "{{ item }}"
+            enabled: true
+            state: stopped
+          register: nbde_server_state
+          check_mode: true
+          loop: "{{ __nbde_server_services }}"
+
+        - name: Check whether services were enabled but stopped
+          assert:
+            that: not item.changed
+          loop: "{{ nbde_server_state.results }}"
+
+        - name: Accepting connections specifying state started
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_service_state: started
+
+        - name: Gather state of services
+          service:
+            name: "{{ item }}"
+            enabled: true
+            state: started
+          register: nbde_server_state
+          check_mode: true
+          loop: "{{ __nbde_server_services }}"
+
+        - name: Check whether services were enabled and started
+          assert:
+            that: not item.changed
+          loop: "{{ nbde_server_state.results }}"
+      always:
+        - name: Cleanup
+          tags: tests::cleanup
+          include_tasks: tasks/cleanup.yml
+
+# vim:set ts=2 sw=2 et:

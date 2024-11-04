@@ -1,0 +1,88 @@
+---
+exclude_paths:
+- tests/roles/
+- .github/
+- .markdownlint.yaml
+- examples/roles/
+- tests/files/
+- .tox/
+extra_vars:
+  network_provider: nm
+  targets: targets
+  test_playbook: tests_default.yml
+kinds:
+- yaml: '**/meta/collection-requirements.yml'
+- playbook: '**/tests/get_coverage.yml'
+- yaml: '**/tests/collection-requirements.yml'
+- playbook: '**/tests/tests_*.yml'
+- playbook: '**/tests/setup-snapshot.yml'
+- tasks: '**/tests/*.yml'
+- playbook: '**/tests/playbooks/*.yml'
+- tasks: '**/tests/tasks/*.yml'
+- tasks: '**/tests/tasks/*/*.yml'
+- vars: '**/tests/vars/*.yml'
+- playbook: '**/examples/*.yml'
+mock_modules:
+- community.general.ini_file
+- win_domain_group
+- win_domain_user
+- ansible.windows.win_command
+- ansible.windows.win_shell
+- ansible.posix.mount
+- containers.podman.podman_container
+- community.general.sefcontext
+- community.general.selogin
+- seboolean
+- selinux
+mock_roles:
+- linux-system-roles.tlog
+- linux-system-roles.postfix
+- linux-system-roles.vpn
+- linux-system-roles.certificate
+- linux-system-roles.crypto_policies
+- linux-system-roles.nbde_server
+- linux-system-roles.postgresql
+- linux-system-roles.sudo
+- linux-system-roles.systemd
+- linux-system-roles.snapshot
+- linux-system-roles.cockpit
+- linux-system-roles.podman
+- linux-system-roles.fapolicyd
+- linux-system-roles.ad_integration
+- linux-system-roles.network
+- linux-system-roles.journald
+- willshersystems.sshd.ansible-sshd
+- linux-system-roles.storage
+- linux-system-roles.rhc
+- linux-system-roles.bootloader
+- linux-system-roles.kernel_settings
+- linux-system-roles.nbde_client
+- linux-system-roles.firewall
+- linux-system-roles.timesync
+- linux-system-roles.kdump
+- linux-system-roles.keylime_server
+- linux-system-roles.selinux
+- linux-system-roles.ha_cluster
+- linux-system-roles.logging
+- linux-system-roles.ssh
+- linux-system-roles.metrics
+- performancecopilot.metrics.bpftrace
+- performancecopilot.metrics.elasticsearch
+- performancecopilot.metrics.grafana
+- performancecopilot.metrics.mssql
+- performancecopilot.metrics.pcp
+- performancecopilot.metrics.postfix
+- performancecopilot.metrics.redis
+- performancecopilot.metrics.repository
+- performancecopilot.metrics.spark
+- linux-system-roles.gfs2
+profile: production
+skip_list:
+- yaml[line-length]
+- fqcn-builtins
+- var-naming[no-role-prefix]
+- sanity[cannot-ignore]
+- meta-runtime[unsupported-version]
+- galaxy[no-changelog]
+supported_ansible_also:
+- 2.14.0

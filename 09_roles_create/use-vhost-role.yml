@@ -1,0 +1,35 @@
+---
+# ---------------------------------------- #
+# 목적: 웹 서버 설정 - Virtual Hosting
+# 1) (debug) 시작 메세지 출력
+# 2) (include_role) 가상 호스트 웹 서버 설정
+# 2.1) (failed_when) 배포판 & 버전 점검
+# * CentOS 9
+# 2.2) 웹 패키지 설치
+# 2.3) 웹 서비스 기동
+# 2.4) 웹 서버 설정
+# * /etc/httpd/conf.d/vhost.conf
+# * notify
+# 2.0) 방화벽 설정 - dependencies => firewall role
+# 3) (copy) 소스 디렉토리 안에 소스 코드 보내기
+# * files/html/* --copy--> /var/www/vhost/ansible_hostname/*
+# 4) (debug) 끝 메세지 출력
+# ---------------------------------------- #
+- name: 0) myvhost 웹 서버 설정 - Virtual Hosting
+  hosts: webservers
+  gather_facts: true
+  tasks:
+    # 1) (debug) 시작 메세지 출력
+    - name: 1) 시작 메세지 출력
+      ansible.builtin.debug:
+        msg: "웹 서버 설정 시작"
+
+    # 2) (include_role) 가상 호스트 웹 서버 설정
+    - name: 2) 가상 호스트 웹 서버 설정
+      ansible.builtin.include_role:
+        name: myvhost
+
+    # 4) (debug) 끝 메세지 출력
+    - name: 4) 끝 메세지 출력
+      ansible.builtin.debug:
+        msg: "웹 서버 설정 끝"

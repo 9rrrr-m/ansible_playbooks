@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Ensure that the role runs with default parameters
+  hosts: all
+  gather_facts: false # test that role works in this case
+  roles:
+    - fedora.linux_system_roles.keylime_server
+  tasks:
+    - name: Run the role
+      include_role:
+        name: fedora.linux_system_roles.keylime_server
+        public: true
+
+    - name: Check header for ansible_managed, fingerprint - legacy
+      include_tasks: tasks/check_header.yml
+      vars:
+        __file: /etc/keylime.conf
+        __fingerprint: system_role:keylime_server
+      when: __keylime_server_legacy_config
+
+
+    - name: Check header for ansible_managed, fingerprint
+      include_tasks: tasks/check_header.yml
+      vars:
+        __file: "{{ item }}"
+        __fingerprint: system_role:keylime_server
+      loop:
+        - "{{ __keylime_server_verifier_snippet_dir }}/{{ __keylime_server_verifier_ip_config }}"
+        - "{{ __keylime_server_verifier_snippet_dir }}/{{ __keylime_server_verifier_database_config }}"
+        - "{{ __keylime_server_verifier_snippet_dir }}/{{ __keylime_server_verifier_keys_certs_config }}"
+        - "{{ __keylime_server_registrar_snippet_dir }}/{{ __keylime_server_registrar_ip_config }}"
+        - "{{ __keylime_server_registrar_snippet_dir }}/{{ __keylime_server_registrar_database_config }}"
+        - "{{ __keylime_server_registrar_snippet_dir }}/{{ __keylime_server_registrar_keys_certs_config }}"
+      when: not __keylime_server_legacy_config

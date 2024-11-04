@@ -1,0 +1,28 @@
+---
+- name: Restore playbook.yml
+  hosts: all
+  tasks:
+    # -------------------------------------------- #
+    # 1) 웹 서버 서비스 중지 & 패키지 삭제 & 설정 파일 삭제
+    # 2) 방화벽 서비스 중지 & 포트 제거
+    # -------------------------------------------- #
+
+    # 1) 웹 서버 서비스 중지 & 패키지 삭제 & 설정 파일 삭제
+    - name: 1) 웹 서버 서비스 중지 & 패키지 삭제 & 설정 파일 삭제
+      ansible.builtin.include_tasks: tasks/restore_web.yml
+      vars:
+        packages:
+          - httpd
+          - mod_ssl
+        service: httpd
+        files:
+          - /var/www/html/index.html
+
+    # 2) 방화벽 서비스 중지 & 포트 제거
+    - name: 2) 방화벽 서비스 중지 & 포트 제거
+      ansible.builtin.include_tasks: tasks/restore_fw.yml
+      vars:
+        service: firewalld
+        rules:
+          - http
+          - https

@@ -1,0 +1,6 @@
+---
+- name: 0) epel-release, boxes 설치
+  hosts: all
+  tasks:
+    - name: 1) 패키지 설치
+      ansible.builtin.include_tasks: install_package.yml

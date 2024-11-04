@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Ensure that the role runs with default parameters
+  hosts: all
+  gather_facts: false # test that role works in this case
+  roles:
+    - fedora.linux_system_roles.fapolicyd
+  tasks:
+    - name: Check header for ansible_managed, fingerprint
+      include_tasks: tasks/check_header.yml
+      vars:
+        __file: "{{ __fapolicyd_dir }}/{{ __fapolicyd_conf }}"
+        __fingerprint: "system_role:fapolicyd"

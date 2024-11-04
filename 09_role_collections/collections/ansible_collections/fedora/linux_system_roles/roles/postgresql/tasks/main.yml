@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: MIT
+---
+# Put the tasks for your role here.
+
+- name: Set platform/version specific variables
+  include_tasks: tasks/set_vars.yml
+
+- name: Gather the package facts
+  package_facts:
+
+- name: Check if requested version is supported in the system (RHEL8)
+  fail:
+    msg: RHEL 8 supports only Postgresql 10, 12, 13, 15 and 16
+  when:
+    - ansible_facts["os_family"] == "RedHat"
+    - ansible_facts["distribution_major_version"] == "8"
+    - postgresql_version | string not in __postgresql_versions_el8
+
+- name: Check if requested version is supported in system (RHEL9)
+  fail:
+    msg: RHEL 9 supports only Postgresql 13, 15 and 16
+  when:
+    - ansible_facts["os_family"] == "RedHat"
+    - ansible_facts["distribution_major_version"] == "9"
+    - postgresql_version | string not in __postgresql_versions_el9
+
+- name: Check if requested version is supported in system (RHEL10)
+  fail:
+    msg: >-
+      RHEL 10 supports only Postgresql versions
+      {{ __postgresql_versions_el10 | join(",") }}
+  when:
+    - ansible_facts["os_family"] == "RedHat"
+    - ansible_facts["distribution_major_version"] == "10"
+    - postgresql_version | string not in __postgresql_versions_el10
+
+- name: Check requested and installed version of Postgresql
+  fail:
+    msg: >-
+      Setting version {{ postgresql_version }} while
+      {{ ansible_facts.packages['postgresql'][0].version }} is installed
+  when:
+    - "'postgresql' in ansible_facts.packages"
+    - ansible_facts.packages["postgresql"][0].version | regex_search('([0-9]*).', '\\1') | first != postgresql_version | string
+
+# rpm ostree pkg mgr cannot handle @groups/modules
+# so just assume the packages are present
+- name: Ensure required packages are installed
+  package:
+    name: "{{ __actual_packages }}"
+    state: present
+    use: "{{ (__postgresql_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+  when: __actual_packages | length > 0
+  vars:
+    __actual_packages: "{{ (__postgresql_is_ostree | d(false)) | ternary(__postgresql_packages | reject('match', '^@'), __postgresql_packages) | list }}"
+
+- name: Init DB
+  when: not __postgresql_conf.stat.exists
+  block:
+    - name: Init DB
+      command:
+        cmd: postgresql-setup --initdb
+        creates: "{{ __postgresql_main_conf_file }}"
+
+    - name: Start Postgresql server
+      service:
+        name: postgresql
+        state: started
+        enabled: true
+
+- name: Enable and start existing instance of postgresql server
+  service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Set and enable password
+  when: postgresql_password is not none
+  block:
+    - name: Set password for super user
+      become: true
+      become_user: postgres
+      environment:
+        PGPASSWORD: "{{ postgresql_password }}"
+      command:
+        cmd: >
+          psql -c "ALTER USER postgres WITH ENCRYPTED PASSWORD
+          '{{ postgresql_password }}';"
+      no_log: true
+      changed_when: false
+
+    - name: Enable logging in by password
+      replace:
+        path: "{{ __postgresql_hba_conf_file }}"
+        regexp: '(peer|ident)$'
+        replace: 'md5'
+        backup: true
+      notify: Restart postgresql
+
+- name: Run provided SQL script
+  include_tasks: input_sql_file.yml
+  when: postgresql_input_file is defined
+
+- name: Manage certificates
+  include_tasks: certificate.yml
+
+- name: Configure pg_hba.conf
+  become: true
+  template:
+    backup: true
+    dest: "{{ __postgresql_hba_conf_file }}"
+    src: pg_hba.conf.j2
+    mode: "0600"
+    owner: postgres
+    group: postgres
+  when: postgresql_pg_hba_conf is defined
+  notify: Restart postgresql
+
+- name: Create postgresql directory in /etc
+  file:
+    path: /etc/postgresql
+    state: directory
+    mode: "0755"
+
+- name: Link generated conf file with server one
+  lineinfile:
+    path: "{{ __postgresql_main_conf_file }}"
+    line: "include_if_exists = '{{ __postgresql_internal_conf_file }}'"
+    insertafter: "EOF"
+  notify: Restart postgresql
+
+- name: Generate postgresql system-roles-internal.conf
+  become: true
+  template:
+    backup: true
+    dest: "{{ __postgresql_internal_conf_file }}"
+    src: postgresql-internal.conf.j2
+    mode: "0600"
+    owner: postgres
+    group: postgres
+
+- name: Generate postgresql system-roles.conf
+  when: postgresql_server_conf is defined
+  block:
+    - name: Generate postgresql system-roles.conf
+      become: true
+      template:
+        backup: true
+        dest: "{{ __postgresql_conf_file }}"
+        src: postgresql.conf.j2
+        mode: "0600"
+        owner: postgres
+        group: postgres
+
+    - name: Link generated conf file with server one
+      lineinfile:
+        path: "{{ __postgresql_main_conf_file }}"
+        line: "include_if_exists = '{{ __postgresql_conf_file }}'"
+      notify: Restart postgresql

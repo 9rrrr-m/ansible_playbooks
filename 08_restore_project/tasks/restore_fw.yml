@@ -1,0 +1,15 @@
+---
+# Task File:
+- name: 2.1) 방화벽 포트 등록 - {{ rules }}
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: disabled
+  loop: "{{ rules }}"
+
+- name: 2.2) 방화벽 서비스 기동 - {{ service }}
+  ansible.builtin.systemd:
+    name: "{{ service }}"
+    state: stopped
+    enabled: false

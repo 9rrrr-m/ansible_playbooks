@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Get corosync authkey
+  include_tasks: ../presharedkey.yml
+  vars:
+    preshared_key_label: corosync authkey
+    preshared_key_src: "{{ ha_cluster_corosync_key_src }}"
+    preshared_key_dest: /etc/corosync/authkey
+    preshared_key_length: 256
+
+- name: Distribute corosync authkey
+  copy:
+    content: "{{ __ha_cluster_some_preshared_key | b64decode }}"
+    dest: /etc/corosync/authkey
+    owner: root
+    group: root
+    mode: "0400"
+  register: __ha_cluster_distribute_corosync_authkey
+
+- name: Get pacemaker authkey
+  include_tasks: ../presharedkey.yml
+  vars:
+    preshared_key_label: pacemaker authkey
+    preshared_key_src: "{{ ha_cluster_pacemaker_key_src }}"
+    preshared_key_dest: /etc/pacemaker/authkey
+    preshared_key_length: 256
+
+- name: Distribute pacemaker authkey
+  copy:
+    content: "{{ __ha_cluster_some_preshared_key | b64decode }}"
+    dest: /etc/pacemaker/authkey
+    owner: hacluster
+    group: haclient
+    mode: "0400"
+  register: __ha_cluster_distribute_pacemaker_authkey
+
+- name: Remove qdevice certificates [CLI]
+  command:
+    cmd: pcs -- qdevice net-client destroy
+  when:
+    - not ansible_check_mode
+    - __ha_cluster_qdevice_model != "net" or ha_cluster_regenerate_keys
+    - "'corosync.quorum.device.client.model.net.certificates.rest-api.v2' not in __ha_cluster_pcsd_capabilities"
+  changed_when: true
+
+- name: Remove qdevice certificates [API]
+  fedora.linux_system_roles.pcs_api_v2:
+    cmd_name: qdevice.client_net_destroy
+  when:
+    - not ansible_check_mode
+    - __ha_cluster_qdevice_model != "net" or ha_cluster_regenerate_keys
+    - "'corosync.quorum.device.client.model.net.certificates.rest-api.v2' in __ha_cluster_pcsd_capabilities"
+
+- name: Obtain and distribute qdevice certificates [CLI]
+  script:
+    cmd: >
+      files/qdevice-certs.sh
+      {{ ansible_check_mode | ternary('check', 'check-and-setup') }}
+      {{ ha_cluster_cluster_name | quote }}
+      {{ __ha_cluster_qdevice_host | quote }}
+  check_mode: false
+  register: __ha_cluster_qdevice_certs
+  changed_when:
+    - __ha_cluster_qdevice_certs.rc == 0
+    - __ha_cluster_qdevice_certs.stdout_lines[-1] != "** certificate already present **"
+  when:
+    - __ha_cluster_qdevice_in_use
+    - __ha_cluster_qdevice_model == "net"
+    - "'corosync.quorum.device.client.model.net.certificates.local' not in __ha_cluster_pcsd_capabilities"
+
+- name: Obtain and distribute qdevice certificates [API]
+  fedora.linux_system_roles.pcs_qdevice_certs:
+    qnetd_host: "{{ __ha_cluster_qdevice_host }}"
+    cluster_name: "{{ ha_cluster_cluster_name }}"
+  when:
+    - __ha_cluster_qdevice_in_use
+    - __ha_cluster_qdevice_model == "net"
+    - "'corosync.quorum.device.client.model.net.certificates.local' in __ha_cluster_pcsd_capabilities"

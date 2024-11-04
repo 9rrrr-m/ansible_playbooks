@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Example keylime_server role invocation
+  hosts: all
+  vars:
+    keylime_server_verifier_ip: "{{ ansible_host }}"
+    keylime_server_registrar_ip: "{{ ansible_host }}"
+
+  roles:
+    - fedora.linux_system_roles.keylime_server

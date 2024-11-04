@@ -1,0 +1,178 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Discover cluster node names
+  set_fact:
+    __ha_cluster_node_name: "{{ ha_cluster.node_name | d(inventory_hostname) }}"
+
+- name: Collect cluster node names
+  set_fact:
+    __ha_cluster_all_node_names: "{{ ansible_play_hosts | map('extract', hostvars, '__ha_cluster_node_name') | list }}"
+
+- name: Check ha_cluster_node_options
+  run_once: true
+  vars:
+    __nodes_from_options: "{{ ha_cluster_node_options | map(attribute='node_name') | list }}"
+  block:
+    - name: >
+        Fail if ha_cluster_node_options contains unknown or duplicate nodes
+      fail:
+        msg: >
+          node_name fields in ha_cluster_node_options must be unique
+          and they must match cluster nodes
+      when:
+        - >
+          (
+            __nodes_from_options != (__nodes_from_options | unique)
+          ) or (
+            __nodes_from_options | difference(__ha_cluster_all_node_names)
+          )
+
+- name: Extract node options
+  set_fact:
+    __ha_cluster_local_node: >-
+      {{
+        (ha_cluster | d({})) | combine(
+          (ha_cluster_node_options | d([]))
+          | selectattr('node_name', 'match', '^' ~ __ha_cluster_node_name ~ '$')
+          | list | last | d({})
+        )
+      }}
+
+- name: Check cluster configuration variables
+  block:
+    - name: Fail if passwords are not specified
+      fail:
+        msg: "{{ item }} must be specified"
+      when:
+        - lookup("vars", item, default="") | string | length < 1
+        - ha_cluster_cluster_present | bool
+      loop:
+        - ha_cluster_hacluster_password
+      run_once: true
+
+    - name: Fail if nodes do not have the same number of SBD devices specified
+      fail:
+        msg: All nodes must have the same number of SBD devices specified
+      when:
+        - ha_cluster_cluster_present
+        - ha_cluster_sbd_enabled
+        - >
+          ansible_play_hosts
+          | map('extract', hostvars,
+            ['__ha_cluster_local_node', 'sbd_devices'])
+          | map('default', [], true)
+          | map('length') | unique | length > 1
+      run_once: true
+
+  # Running a qnetd on a cluster node does't make sense, fencing would make
+  # the qnetd unavailable, even if temporarily.
+    - name: Fail if configuring qnetd on a cluster node
+      fail:
+        msg: >
+          Qnetd cannot be configured on a cluster node -
+          'ha_cluster_cluster_present' and 'ha_cluster_qnetd.present' cannot
+          be both set to true
+      when:
+        - ha_cluster_cluster_present
+        - ha_cluster_qnetd.present | d(false)
+
+    - name: Fail if no valid level is specified for a fencing level
+      fail:
+        msg: Specify 'level' 1..9 for each fencing level
+      when:
+        - not((item.level | d() | int) > 0 and (item.level | d() | int) < 10)
+      loop: "{{ ha_cluster_stonith_levels }}"
+      run_once: true
+
+    - name: Fail if no target is specified for a fencing level
+      fail:
+        msg: >
+          Specify exactly one of 'target', 'target_pattern', 'target_attribute'
+          for each fencing level
+      when:
+        - >
+          [item.target is defined,
+            item.target_pattern is defined,
+            item.target_attribute is defined]
+          | select | list | length != 1
+      loop: "{{ ha_cluster_stonith_levels }}"
+      run_once: true
+
+- name: Extract qdevice settings
+  set_fact:
+    __ha_cluster_qdevice_in_use: "{{ 'device' in ha_cluster_quorum }}"
+    __ha_cluster_qdevice_model: "{{ ha_cluster_quorum.device.model | d('') }}"
+  # This may set empty value, if it is not defined. Such value is not valid.
+  # It will be caught by pcs validation before we try using it in the role.
+    __ha_cluster_qdevice_host: "{{ ha_cluster_quorum.device.model_options | d([]) | selectattr('name', 'match', '^host$') | map(attribute='value') | list | last | d('') }}"
+    __ha_cluster_qdevice_pcs_address: "{{ ha_cluster_quorum.device.model_options | d([]) | selectattr('name', 'match', '^pcs-address$') | map(attribute='value') | list | last | d('') }}"
+
+- name: Figure out if ATB needs to be enabled for SBD
+  set_fact:
+  # SBD needs ATB enabled if all of these are true:
+  # - sbd does not use devices (In check-and-prepare-role-variables.yml it
+  #   is verified that all nodes have the same number of devices defined.
+  #   Therefore it is enough to check devices of any single node.)
+  # - number of nodes is even
+  # - qdevice is not used
+    __ha_cluster_sbd_needs_atb: "{{ ha_cluster_sbd_enabled and not __ha_cluster_local_node.sbd_devices | d([]) and __ha_cluster_all_node_names | length is even and not __ha_cluster_qdevice_in_use }}"
+
+- name: Fail if SBD needs ATB enabled and the user configured ATB to be disabled
+  fail:
+    msg: Cannot set auto_tie_breaker to disabled when SBD needs it to be enabled
+  when:
+    - __ha_cluster_sbd_needs_atb | bool
+    - ha_cluster_quorum.options | d([]) | selectattr('name', 'match', '^auto_tie_breaker$') | map(attribute='value') | select('in', ['0', 0]) | list | length > 0
+
+- name: >-
+    Fail if ha_cluster_pcsd_public_key_src and ha_cluster_pcsd_private_key_src
+    are set along with ha_cluster_pcsd_certificates
+  fail:
+    msg: >-
+      Cannot set ha_cluster_pcsd_public_key_src and
+      ha_cluster_pcsd_private_key_src along with ha_cluster_pcsd_certificates.
+      Remove ha_cluster_pcsd_public_key_src and ha_cluster_pcsd_private_key_src
+      or ha_cluster_pcsd_certificates.
+  when:
+    - ha_cluster_pcsd_public_key_src is not none
+    - ha_cluster_pcsd_private_key_src is not none
+    - ha_cluster_pcsd_certificates | d([])
+
+- name: Fetch pcs capabilities
+  command:
+    cmd: pcs --version --full
+  check_mode: false
+  changed_when: false # this is a read-only command
+  register: __ha_cluster_pcs_version
+
+- name: Parse pcs capabilities
+  set_fact:
+    __ha_cluster_pcs_capabilities: "{{ __ha_cluster_pcs_version.stdout_lines[1].split() }}"
+  # To support a pre-release version in CI, there is a special check for
+  # 0.11.5 with a capability. This can be removed once 0.11.6 is released
+    __ha_cluster_pcsd_capabilities_available: "{{ (__ha_cluster_pcs_version.stdout_lines[0] is version('0.11.6', '>=')) or (__ha_cluster_pcs_version.stdout_lines[0] is version('0.11.5', '>=') and 'pcmk.constraint.config.output-formats' in __ha_cluster_pcs_version.stdout_lines[1].split()) }}"
+
+- name: Fetch pcsd capabilities
+  command:
+    cmd: pcsd --version --full
+  check_mode: false
+  changed_when: false # this is a read-only command
+  register: __ha_cluster_pcsd_version
+  when: __ha_cluster_pcsd_capabilities_available
+
+- name: Parse pcsd capabilities
+  set_fact:
+    __ha_cluster_pcsd_capabilities: "{{ (__ha_cluster_pcsd_version.stdout_lines[1] | d('')).split() }}"
+
+# The capability got released in RHEL 8.3, which is currently the oldest
+# release supported by the role. Therefore, support for pcs without the
+# capability is not implemented. If there is a requirement to do so, implement
+# the support for old implementation of resource and operation defaults and
+# change or remove this check.
+- name: Fail if pcs is to old to configure resources and operations defaults
+  fail:
+    msg: >
+      Installed pcs doesn't support configuring resources and operations
+      defaults. Please, upgrade pcs.
+  when:
+    - ( ha_cluster_resource_defaults and not 'pcmk.properties.resource-defaults.multiple' in __ha_cluster_pcs_capabilities ) or ( ha_cluster_resource_operation_defaults and not 'pcmk.properties.operation-defaults.multiple' in __ha_cluster_pcs_capabilities )

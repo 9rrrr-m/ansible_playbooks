@@ -1,0 +1,25 @@
+---
+- name: Test rewrite default sudoers and remove unauthorized files
+  hosts: all
+  tasks:
+    - name: Run tests
+      block:
+        - name: Test setup
+          include_tasks: tasks/setup.yml
+
+        - name: Run the role
+          include_role:
+            name: fedora.linux_system_roles.sudo
+          vars:
+            sudo_rewrite_default_sudoers_file: true
+            sudo_remove_unauthorized_included_files: true
+
+        - name: Check sudoers
+          include_tasks: tasks/assert_files_identical.yml
+          vars:
+            __sudo_ok_path: files/tests_role_applied.ok
+            __sudo_test_path: /etc/sudoers
+
+      always:
+        - name: Test cleanup
+          include_tasks: tasks/cleanup.yml

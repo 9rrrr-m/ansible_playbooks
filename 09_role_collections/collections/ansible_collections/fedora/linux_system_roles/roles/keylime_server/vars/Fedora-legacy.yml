@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+---
+
+__keylime_server_legacy_config: true
+__keylime_server_verifier_default_db:
+__keylime_server_registrar_default_db:

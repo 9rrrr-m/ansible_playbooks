@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: BSD-3-Clause
+---
+- name: Set down {{ profile }}
+  hosts: all
+  vars:
+    network_connections:
+      - name: "{{ profile }}"
+        state: down
+  roles:
+    - fedora.linux_system_roles.network

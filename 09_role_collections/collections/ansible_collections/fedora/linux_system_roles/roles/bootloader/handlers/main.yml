@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+---
+# EL 7 workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1152027
+- name: Fix default kernel boot parameters
+  shell: |-
+    set -o pipefail
+    grubby --info=DEFAULT | awk '/^args/ {print $0}'
+    cat {{ __bootloader_default_grub }}
+    eval $(grubby --info=DEFAULT | awk '/^args/ {print $0}')
+    sed -i -e "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$args\"|" \
+      {{ __bootloader_default_grub }}
+    cat {{ __bootloader_default_grub }}
+  changed_when: true
+
+- name: Reboot system
+  include_tasks: tasks/reboot.yml

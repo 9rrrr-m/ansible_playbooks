@@ -1,0 +1,63 @@
+---
+- name: Create key if it does not exist
+  command:
+    cmd: "/usr/bin/ssh-keygen -t rsa -f {{ kdump_sshkey }} -N '' "
+    creates: "{{ kdump_sshkey }}"
+
+- name: Fetch key
+  slurp:
+    src: "{{ kdump_sshkey }}.pub"
+  register: __kdump_keydata
+
+- name: Handle authorized_keys update
+  vars:
+    __kdump_ssh_path: "{{ __kdump_ssh_user_info.home ~ '/.ssh' }}"
+    __kdump_authorized_keys_path: "{{ __kdump_ssh_user_info.home ~ '/.ssh/authorized_keys' }}"
+    __kdump_new_key: "{{ __kdump_keydata.content | b64decode | trim }}"
+  delegate_to: "{{ kdump_ssh_server }}"
+  block:
+    - name: Get userinfo for {{ kdump_ssh_user }}
+      user:
+        name: "{{ kdump_ssh_user }}"
+        state: present
+      register: __kdump_ssh_user_info
+
+    - name: Get the ssh directory for the user
+      stat:
+        path: "{{ __kdump_ssh_path }}"
+      register: __kdump_ssh_path_stat
+
+    - name: Get the authorized_keys file for the user
+      stat:
+        path: "{{ __kdump_authorized_keys_path }}"
+      register: __kdump_authorized_keys_file
+
+    - name: Ensure ssh directory for authorized_keys if needed
+      file:
+        path: "{{ __kdump_ssh_path_stat.stat.path | d(__kdump_ssh_path) }}"
+        state: directory
+        group: "{{ __kdump_ssh_path_stat.stat.gr_name | d(kdump_ssh_user) }}"
+        owner: "{{ __kdump_ssh_path_stat.stat.pw_name | d(kdump_ssh_user) }}"
+        mode: "{{ __kdump_ssh_path_stat.stat.mode | d('0700') }}"
+
+    - name: Write new authorized_keys if needed
+      lineinfile:
+        line: "{{ __kdump_new_key }}"
+        state: present
+        create: true
+        path: "{{ __kdump_authorized_keys_file.stat.path | d(__kdump_authorized_keys_path) }}"
+        group: "{{ __kdump_authorized_keys_file.stat.gr_name | d(kdump_ssh_user) }}"
+        owner: "{{ __kdump_authorized_keys_file.stat.pw_name | d(kdump_ssh_user) }}"
+        mode: "{{ __kdump_authorized_keys_file.stat.mode | d('0600') }}"
+
+- name: Fetch the servers public key
+  slurp:
+    src: /etc/ssh/ssh_host_rsa_key.pub
+  register: __kdump_serverpubkey
+  delegate_to: "{{ kdump_ssh_server }}"
+
+- name: Add the servers public key to known_hosts on managed node
+  known_hosts:
+    key: "{{ __kdump_ssh_server_location }} {{ __kdump_serverpubkey.content | b64decode }}"
+    name: "{{ __kdump_ssh_server_location }}"
+    path: /etc/ssh/ssh_known_hosts

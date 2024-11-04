@@ -1,0 +1,5 @@
+---
+# vars file for roles/myfirewall
+web_rules:
+  - http
+  - https

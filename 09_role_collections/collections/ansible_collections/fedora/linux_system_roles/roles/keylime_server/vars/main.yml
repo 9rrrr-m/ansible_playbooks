@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MIT
+---
+
+__keylime_server_legacy_config: false
+
+# ansible_facts required by the role
+__keylime_server_required_facts:
+  - distribution
+  - distribution_major_version
+  - distribution_version
+  - os_family
+
+# the subsets of ansible_facts that need to be gathered in case any of the
+# facts in required_facts is missing; see the documentation of
+# the 'gather_subset' parameter of the 'setup' module
+__keylime_server_required_facts_subsets: "{{ ['!all', '!min'] + __keylime_server_required_facts }}"
+
+__keylime_server_packages:
+  - keylime-verifier
+  - keylime-registrar
+
+__keylime_server_verifier_service: keylime_verifier
+__keylime_server_registrar_service: keylime_registrar
+
+__keylime_server_user: keylime
+__keylime_server_group: keylime
+
+# Default database configuration.
+__keylime_server_verifier_default_db: sqlite
+__keylime_server_registrar_default_db: sqlite
+
+__keylime_server_verifier_snippet_dir: /etc/keylime/verifier.conf.d
+__keylime_server_registrar_snippet_dir: /etc/keylime/registrar.conf.d
+
+__keylime_server_verifier_ip_config: verifier-ip.conf
+__keylime_server_verifier_database_config: verifier-database.conf
+__keylime_server_verifier_keys_certs_config: verifier-keys-certs.conf
+
+__keylime_server_registrar_ip_config: registrar-ip.conf
+__keylime_server_registrar_database_config: registrar-database.conf
+__keylime_server_registrar_keys_certs_config: registrar-keys-certs.conf
+
+# time, in seconds, to wait for the verifier and registrar
+# services to become available
+__keylime_service_timeout: 30

@@ -1,0 +1,21 @@
+---
+- name: Play 04. 파일 서버 패키지 설치
+  hosts: fileservers
+  tasks:
+    - name: 4.1) 변수 포함 - package.yml
+      ansible.builtin.include_vars: package.yml
+    
+    - name: 4.2) 패키지 설치 - httpd
+      ansible.builtin.include_tasks: install_package.yml
+
+    - name: 4.3) 패키지 설치 - epel-release
+      ansible.builtin.include_tasks: install_package.yml
+      vars:
+        packages:
+          web_pkg: epel-release
+
+    - name: 4.4) 패키지 설치 - tomcat
+      ansible.builtin.include_tasks: install_package.yml
+      vars:
+        packages:
+          web_pkg: tomcat

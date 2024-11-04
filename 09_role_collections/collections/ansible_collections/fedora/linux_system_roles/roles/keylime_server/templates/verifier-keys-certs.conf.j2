@@ -1,0 +1,13 @@
+{{ ansible_managed | comment }}
+{{ "system_role:keylime_server" | comment(prefix="", postfix="") }}
+
+[verifier]
+tls_dir = {{ keylime_server_verifier_tls_dir }}
+server_key = {{ keylime_server_verifier_server_key }}
+server_key_password = {{ keylime_server_verifier_server_key_passphrase }}
+server_cert = {{ keylime_server_verifier_server_cert }}
+trusted_client_ca = {{ keylime_server_verifier_trusted_client_ca }}
+client_key = {{ keylime_server_verifier_client_key }}
+client_key_password = {{ keylime_server_verifier_client_key_passphrase }}
+client_cert = {{ keylime_server_verifier_client_cert }}
+trusted_server_ca = {{ keylime_server_verifier_trusted_server_ca }}

@@ -1,0 +1,4 @@
+---
+web_root: /var/www/html
+fw_svc: http
+fw_state: enabled

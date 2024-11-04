@@ -1,0 +1,100 @@
+---
+- name: Test we can handle all configuration options documented in manual page
+  hosts: all
+  gather_facts: true
+  vars:
+    ssh_c: {}
+    pkg_mgr: "{{ (ansible_facts['distribution_version'] | int > 7) | ternary('dnf', 'yum') }}"
+  tasks:
+    - name: Ubuntu and RHEL6 containers are minified, missing manual pages
+      meta: end_host
+      when:
+        - ansible_facts['distribution'] == 'Ubuntu' or (ansible_facts['distribution'] in ['CentOS', 'RedHat'] and ansible_facts['distribution_version'] | int < 7)
+
+    - name: Define common variables
+      set_fact:
+        ssh_test_package: openssh-clients
+
+    - name: Define specific variables
+      set_fact:
+        ssh_test_package: openssh-client
+      when: >
+        ansible_facts['os_family'] != 'RedHat'
+
+    - name: Determine if system is ostree and set flag
+      when: not __ssh_is_ostree is defined
+      block:
+        - name: Check if system is ostree
+          stat:
+            path: /run/ostree-booted
+          register: __ostree_booted_stat
+
+        - name: Set flag to indicate system is ostree
+          set_fact:
+            __ssh_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+    - name: Enable installation of manual pages on Fedora/RHEL
+      ansible.builtin.lineinfile:
+        line: tsflags=nodocs
+        path: "{{ '/etc/dnf/dnf.conf' if ansible_facts['distribution_version'] | int > 7 else '/etc/yum.conf' }}"
+        state: absent
+      when:
+        - ansible_facts['os_family'] == "RedHat"
+
+    - name: Reinstall manual pages for openssh-clients on RHEL
+      ansible.builtin.command: "{{ pkg_mgr }} reinstall -y openssh-clients"
+      when:
+        - ansible_facts['os_family'] == "RedHat"
+        - not __ssh_is_ostree | bool
+      changed_when: true
+
+    - name: Make sure manual pages and bash are installed
+      package:
+        name:
+          - "{{ (ansible_facts['os_family'] == 'RedHat') | ternary('man-db', 'man') }}"
+          - bash
+          - "{{ ssh_test_package }}"
+        state: present
+        use: "{{ (__ssh_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+
+    - name: Get list of options from manual page
+      shell: >-
+        set -o pipefail && man ssh_config \
+          | grep -o '^\(     \|       \)[A-Z][A-Za-z0-9]*\(.\|  \)' \
+          | grep -v "[A-Za-z0-9] $" | grep -v "[^A-Za-z0-9 ]$" \
+          | awk '{ print $1 }' \
+          | grep -v '^$' | grep -v \
+          "^\(A\|Match\|Host\|OpenSSH\|The\|\Theo\|Tatu\|Unless\|Since\|Arguments\|Note\|Tag\)$"
+      args:
+        executable: /bin/bash
+
+      register: ssh_options
+      changed_when: false
+
+    - name: Show ssh_options
+      debug:
+        var: ssh_options.stdout_lines
+
+    - name: Construct the configuration list
+      set_fact:
+        ssh_c: "{{ ssh_c | combine({item: 'yes'}) }}"
+      loop: "{{ ssh_options.stdout_lines }}"
+
+    - name: Run role
+      include_role:
+        name: fedora.linux_system_roles.ssh
+      vars:
+        __ssh_supports_validate: false
+        ssh_config_file: /tmp/ssh_config
+        ssh: "{{ ssh_c }}"
+
+    - name: Download the configuration file
+      slurp:
+        src: /tmp/ssh_config
+      register: config
+
+    - name: Verify the options are in the file
+      assert:
+        that:
+          - item ~ ' yes' in config.content | b64decode
+      loop: "{{ ssh_options.stdout_lines }}"

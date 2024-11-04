@@ -1,0 +1,52 @@
+---
+# tasks file for myvhost
+# ---------------------------------------- #
+# 2) (include_role) 가상 호스트 웹 서버 설정
+# 2.0) 방화벽 설정 - dependencies => firewall role
+# 2.1) (failed_when) 배포판 & 버전 점검
+# * CentOS 9
+# 2.2) (dnf) 웹 패키지 설치
+# 2.3) (systemd) 웹 서비스 기동
+# 2.4) (template) 웹 서버 설정
+# * /etc/httpd/conf.d/vhost.conf
+# * notify
+# ---------------------------------------- #
+# 2.1) (failed_when) 배포판 & 버전 점검
+- name: 2.1) 배포판 & 버전 점검
+  ansible.builtin.debug:
+    msg: "[점검] CentOS Stream 9 버전에서만 동작합니다."
+  failed_when: >
+    ansible_distribution != "CentOS" or
+    ansible_distribution_version != "9"
+
+# 2.2) (dnf) 웹 패키지 설치
+- name: 2.2) 웹 패키지 설치
+  ansible.builtin.dnf:
+    name: "{{ web_packages }}"
+    state: present
+
+# 2.3) (systemd) 웹 서비스 기동
+- name: 2.3) 웹 서비스 기동
+  ansible.builtin.systemd:
+    name: httpd
+    state: started
+    enabled: true
+
+# 2.4) (template) 웹 서버 설정
+- name: 2.4) 웹 서버 설정
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: /etc/httpd/conf.d/vhost.conf
+    owner: root
+    group: root
+    mode: '0644'
+    # validate: /usr/sbin/httpd -t -f %s
+  notify: restart_httpd
+
+# 3) (copy) 소스 디렉토리 안에 소스 코드 보내기
+- name: 3) 소스 디렉토리 안에 소스 코드 보내기
+  ansible.builtin.copy:
+    src: files/html/
+    dest: "/var/www/vhosts/{{ ansible_hostname }}"
+    owner: root
+    group: root

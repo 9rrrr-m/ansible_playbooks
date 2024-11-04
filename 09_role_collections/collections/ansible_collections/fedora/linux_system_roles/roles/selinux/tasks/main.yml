@@ -1,0 +1,144 @@
+---
+- name: Set ansible_facts required by role and install packages
+  include_tasks: set_facts_packages.yml
+
+- name: Set permanent SELinux state if enabled
+# noqa args[module] fqcn[action]
+  selinux:
+    state: "{{ selinux_state | default(ansible_selinux.config_mode, true) }}"
+    policy: "{{ selinux_policy | default(ansible_selinux.type, true) }}"
+  register: selinux_mod_output_enabled
+  when: ansible_selinux.status == "enabled" and (selinux_state or selinux_policy)
+
+- name: Set permanent SELinux state if disabled
+# noqa args[module] fqcn[action]
+  selinux:
+    state: "{{ selinux_state }}"
+    policy: "{{ selinux_policy | default('targeted', true) }}"
+  register: selinux_mod_output_disabled
+  when: ansible_selinux.status == "disabled" and selinux_state
+
+- name: Set selinux_reboot_required
+  set_fact:
+    selinux_reboot_required: "{{ selinux_mod_output_enabled.reboot_required if (selinux_mod_output_enabled.reboot_required is defined) else (selinux_mod_output_disabled.reboot_required | default(false)) }}"
+
+- name: Fail if reboot is required
+  fail:
+    msg: "Reboot is required to apply changes. Re-execute the role after boot."
+  when: selinux_reboot_required
+
+- name: Warn if SELinux is disabled
+  debug:
+    msg: "SELinux is disabled on system - some SELinux modules can crash"
+  when: ansible_selinux.status == "disabled"
+
+- name: Drop all local modifications
+  command: /usr/sbin/semanage -i -
+  args:
+    stdin: "{{ drop_local_modifications }}"
+  when: selinux_all_purge | bool
+  notify: __selinux_reload_policy
+  changed_when: true
+
+- name: Purge all SELinux boolean local modifications
+  command: /usr/sbin/semanage boolean -D
+  when: selinux_booleans_purge | bool
+  changed_when: true
+
+- name: Purge all SELinux file context local modifications
+  command: /usr/sbin/semanage fcontext -D
+  when: selinux_fcontexts_purge | bool
+  changed_when: true
+
+- name: Purge all SELinux port local modifications
+  command: /usr/sbin/semanage port -D
+  when: selinux_ports_purge | bool
+  changed_when: true
+
+- name: Purge all SELinux login local modifications
+  command: /usr/sbin/semanage login -D
+  when: selinux_logins_purge | bool
+  changed_when: true
+
+- name: Set SELinux booleans
+# noqa fqcn[action]
+  seboolean:
+    name: "{{ __selinux_item.name }}"
+    state: "{{ __selinux_item.state }}"
+    persistent: "{{ __selinux_item.persistent | default(ansible_selinux.status == 'disabled') }}"
+    ignore_selinux_state: "{{ ansible_selinux.status == 'disabled' }}"
+  with_items: "{{ selinux_booleans }}"
+  loop_control:
+    loop_var: __selinux_item
+
+- name: Set SELinux file contexts
+  community.general.sefcontext:
+    target: "{{ __selinux_item.target }}"
+    setype: "{{ __selinux_item.setype }}"
+    ftype: "{{ __selinux_item.ftype | default('a') }}"
+    state: "{{ __selinux_item.state | default('present') }}"
+    selevel: "{{ __selinux_item.selevel | default(omit) }}"
+    seuser: "{{ __selinux_item.seuser | default(omit) }}"
+    ignore_selinux_state: "{{ ansible_selinux.status == 'disabled' }}"
+  with_items: "{{ selinux_fcontexts }}"
+  loop_control:
+    loop_var: __selinux_item
+
+- name: Set an SELinux label on a port
+  fedora.linux_system_roles.local_seport:
+    ports: "{{ __selinux_item.ports }}"
+    proto: "{{ __selinux_item.proto | default('tcp') }}"
+    setype: "{{ __selinux_item.setype }}"
+    state: "{{ __selinux_item.state | default('present') }}"
+    local: "{{ __selinux_item.local | default(False) }}"
+    ignore_selinux_state: "{{ ansible_selinux.status == 'disabled' }}"
+  with_items: "{{ selinux_ports }}"
+  loop_control:
+    loop_var: __selinux_item
+
+- name: Set linux user to SELinux user mapping
+  community.general.selogin:
+    login: "{{ __selinux_item.login }}"
+    seuser: "{{ __selinux_item.seuser }}"
+    serange: "{{ __selinux_item.serange | default('s0') }}"
+    state: "{{ __selinux_item.state | default('present') }}"
+    reload: "{{ __selinux_item.reload | default(False) }}"
+    ignore_selinux_state: "{{ ansible_selinux.status == 'disabled' }}"
+  with_items: "{{ selinux_logins }}"
+  notify: __selinux_reload_policy
+  loop_control:
+    loop_var: __selinux_item
+
+- name: Get SELinux modules facts
+  fedora.linux_system_roles.selinux_modules_facts:
+
+- name: Load SELinux modules
+  include_tasks: selinux_load_module.yml
+  vars:
+    mod_name: "{{ __selinux_item.name | default(__selinux_item.path | default('') | basename | splitext | first) }}"
+    state: "{{ __selinux_item.state | default('enabled') }}"
+    priority: "{{ __selinux_item.priority | default('400') }}"
+  # yamllint disable rule:line-length
+    checksum: "{{ selinux_installed_modules[mod_name][priority]['checksum'] | default('sha256:') }}"
+  when: selinux_modules is defined
+  loop: "{{ selinux_modules | flatten(levels=1) }}"
+  loop_control:
+    loop_var: __selinux_item
+
+- name: Restore SELinux labels on filesystem tree
+  command: /sbin/restorecon -R -F -v {{ restorecon_threads }} {{ __selinux_item }}
+  with_items: "{{ selinux_restore_dirs }}"
+  loop_control:
+    loop_var: __selinux_item
+  register: restorecon_cmd
+  changed_when: '"Relabeled" in restorecon_cmd.stdout'
+
+- name: Restore SELinux labels on filesystem tree in check mode
+  command: /sbin/restorecon -R -F -v -n {{ restorecon_threads }} {{ __selinux_item }}
+  with_items: "{{ selinux_restore_dirs }}"
+  loop_control:
+    loop_var: __selinux_item
+  register: restorecon_cmd
+  changed_when: '"Would relabel" in restorecon_cmd.stdout'
+  check_mode: false
+  when: ansible_check_mode

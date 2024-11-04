@@ -1,0 +1,11 @@
+---
+# Task File:
+- name: 웹 파일 생성 - {{ file }}
+  ansible.builtin.copy:
+    content: |
+      <pre>
+      IP: {{ ansible_default_ipv4.address }}
+      HOST: {{ ansible_fqdn }}
+      </pre>
+    dest: "{{ file }}"
+    mode: '0644'

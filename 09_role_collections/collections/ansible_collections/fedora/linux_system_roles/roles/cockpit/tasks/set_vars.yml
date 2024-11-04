@@ -1,0 +1,38 @@
+---
+- name: Ensure ansible_facts used by role
+  setup:
+    gather_subset: "{{ __cockpit_required_facts_subsets }}"
+  when: __cockpit_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Determine if system is ostree and set flag
+  when: not __cockpit_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __cockpit_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Determine if system is transactional update and set flag
+  when: not __cockpit_is_transactional is defined
+  block:
+    - name: Check if transactional-update exists in /sbin
+      stat:
+        path: /sbin/transactional-update
+      register: __transactional_update_stat
+
+    - name: Set flag if transactional-update exists
+      set_fact:
+        __cockpit_is_transactional: "{{ __transactional_update_stat.stat.exists }}"
+
+- name: Set version specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}-{{ ansible_distribution_version }}.yml"
+    - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_os_family }}.yml"
+    - "default.yml"

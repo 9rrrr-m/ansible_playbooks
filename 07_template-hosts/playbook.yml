@@ -1,0 +1,11 @@
+---
+- name: 0) /etc/hosts 파일 배포
+  hosts: webservers
+  tasks:
+    - name: 관리 호스트에 /etc/hosts 파일 배포
+      ansible.builtin.template:
+        src: templates/hosts.j2
+        dest: /root/hosts
+        owner: root
+        group: root
+        mode: '0644'

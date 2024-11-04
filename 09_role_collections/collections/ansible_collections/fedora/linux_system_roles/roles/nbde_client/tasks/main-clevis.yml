@@ -1,0 +1,90 @@
+---
+- name: Ensure required packages are installed
+  package:
+    name: "{{ __nbde_client_packages }}"
+    state: present
+
+- name: Get services
+  service_facts:
+
+- name: Enable clevis askpass unit
+  systemd:
+    name: clevis-luks-askpass.path
+    enabled: true
+    daemon_reload: true
+  when: ansible_facts.services['clevis-luks-askpass.service'] is defined
+
+- name: Generate nbde_client dracut config
+  template:
+    src: nbde_client.conf
+    dest: /etc/dracut.conf.d/nbde_client.conf
+    owner: root
+    mode: '0444'
+  when: nbde_client_early_boot | bool
+
+- name: Check whether devices are at the desired state
+  when:
+    - nbde_client_bindings | default([])
+  fedora.linux_system_roles.nbde_client_clevis:
+    bindings: "{{ nbde_client_bindings | default([]) }}"
+  check_mode: true
+  register: __nbde_client_clevis_check_state
+  no_log: true
+
+- name: Prepare key files, perform clevis operations and dispose of key files
+  when:
+    - __nbde_client_clevis_check_state is defined
+    - __nbde_client_clevis_check_state is changed
+  block:
+    - name: Create temporary directory to hold key files
+      tempfile:
+        state: directory
+        suffix: nbde_client_encryption_keys
+      when:
+        - nbde_client_bindings | default([])
+      register: nbde_client_tempdir
+
+    - name: Ensure we transfer key files
+      copy:
+        src: "{{ item.encryption_key_src }}"
+        dest: "{{ nbde_client_tempdir.path }}/"
+        mode: '0400'
+      when:
+        - nbde_client_tempdir.path is defined
+        - item.encryption_key_src | default("")
+      loop: "{{ nbde_client_bindings }}"
+      loop_control:
+        label: "{{ item.encryption_key_src | default('') }}"
+      no_log: true
+
+    - name: Perform clevis operations
+      when:
+        - nbde_client_bindings | default([])
+        - nbde_client_tempdir.path is defined
+      fedora.linux_system_roles.nbde_client_clevis:
+        bindings: "{{ nbde_client_bindings | default([]) }}"
+        data_dir: "{{ nbde_client_tempdir.path }}"
+      notify: Handle nbde_client update initramfs
+      no_log: true
+
+  rescue:
+    - name: Failed message
+      fail:
+        msg: "{{ ansible_failed_result }}"
+
+  always:
+    - name: Remove temporary directory used to hold key files
+      file:
+        path: "{{ nbde_client_tempdir.path }}"
+        state: absent
+      when:
+        - nbde_client_bindings | default([])
+        - nbde_client_tempdir.path is defined
+
+- name: Deploy mechanism to clear network configuration generated during early boot
+  include_tasks: clear_initrd_netcfg-{{ __nbde_client_clear_initrd_netcfg_strategy }}.yml
+  when:
+    - __nbde_client_clear_initrd_netcfg_strategy is defined
+    - nbde_client_early_boot | bool
+
+# vim:set ts=2 sw=2 et:

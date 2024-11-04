@@ -1,0 +1,15 @@
+---
+- name: Add text to an existing file
+  hosts: all
+  tasks:
+    - name: add file
+      ansible.builtin.copy:
+        content: "users file"
+        dest: /home/devops/users.txt
+
+    - name: Add a single line of text to a file
+      ansible.builtin.lineinfile:
+        path: /home/devops/users.txt
+        regexp: ^users
+        line: This line was fixed by the lineinfile module.
+        state: present

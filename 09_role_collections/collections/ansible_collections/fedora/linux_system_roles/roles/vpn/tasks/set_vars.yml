@@ -1,0 +1,32 @@
+---
+- name: Ensure ansible_facts used by role
+  setup:
+    gather_subset: "{{ __vpn_required_facts_subsets }}"
+  when: __vpn_required_facts | difference(ansible_facts.keys() | list) | length > 0
+
+- name: Determine if system is ostree and set flag
+  when: not __vpn_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      ansible.builtin.stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      ansible.builtin.set_fact:
+        __vpn_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Set platform/version specific variables
+  include_vars: "{{ __vpn_vars_file }}"
+  loop:
+    - "{{ ansible_facts['os_family'] }}.yml"
+    - "{{ ansible_facts['distribution'] }}.yml"
+    - >-
+      {{ ansible_facts['distribution'] ~ '_' ~
+      ansible_facts['distribution_major_version'] }}.yml
+    - >-
+      {{ ansible_facts['distribution'] ~ '_' ~
+      ansible_facts['distribution_version'] }}.yml
+  vars:
+    __vpn_vars_file: "{{ role_path }}/vars/{{ item }}"
+  when: __vpn_vars_file is file

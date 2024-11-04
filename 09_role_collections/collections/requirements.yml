@@ -1,0 +1,9 @@
+---
+collections:
+  - name: community.crypto
+
+  - name: ansible-posix-1.6.2.tar.gz
+
+  - name: http://172.16.6.253/ansible/community-mysql-3.10.3.tar.gz
+
+  - name: http://172.16.6.253/ansible/fedora-linux_system_roles-1.88.9.tar.gz

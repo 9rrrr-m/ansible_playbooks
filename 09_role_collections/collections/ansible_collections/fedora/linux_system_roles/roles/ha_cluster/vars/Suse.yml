@@ -1,0 +1,53 @@
+---
+# Variables for Suse set in ansible_facts['os_family']
+ha_cluster_pacemaker_shell: crmsh
+
+# Placeholder with pcs name
+__ha_cluster_pcs_provider: crm
+
+# ClusterTools2 removed because it is SLES4SAP specific
+# patterns-ha-ha_sles requires SLES 15 SP5+ or SLES4SAP 15
+__ha_cluster_role_essential_packages:
+  - 'pacemaker'
+  - 'corosync'
+  - 'crmsh'
+  - 'fence-agents'
+  - 'ha-cluster-bootstrap'
+  - 'patterns-ha-ha_sles'
+  - 'resource-agents'
+  - 'cluster-glue'
+  - 'socat'
+  - 'libxml2-tools'
+  - 'rsyslog'
+  - 'openssl'
+
+__ha_cluster_fullstack_node_packages: []
+
+__ha_cluster_cloud_agents_packages: []
+
+__ha_cluster_qdevice_node_packages:
+  - corosync-qdevice
+
+__ha_cluster_sbd_packages:
+  - sbd
+  - open-iscsi
+
+__ha_cluster_services:
+  - corosync
+  - corosync-qdevice
+  - pacemaker
+
+__ha_cluster_crm_shadow: shd
+
+# fence agent list for os_family
+__ha_cluster_fence_agent_packages_default: ['fence-agents']
+
+# Corosync input for jinja2 template
+ha_cluster_corosync_params:
+
+# user override: selinux and firewall roles are currently not supported
+ha_cluster_manage_firewall: false
+ha_cluster_manage_selinux: false
+
+# List of allowed role inputs to limit crmsh issues
+__ha_cluster_crmsh_roles: ['promoted', 'unpromoted', 'master', 'slave', 'started', 'stopped'] # wokeignore:rule=master,slave

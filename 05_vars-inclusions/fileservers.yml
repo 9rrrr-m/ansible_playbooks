@@ -1,0 +1,20 @@
+---
+- name: Play 02. 파일 서버 설정
+  hosts: fileservers
+  gather_facts: true
+  tasks:
+    - name: 2.1) 변수 포함
+      include_vars: paths.yml
+
+    - name: 2.2) 원격 디렉토리 생성
+      ansible.builtin.file:
+        path: "{{ paths.fileserver }}"
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0755'
+      register: output
+
+    - name: 2.3) 디버깅 메세지
+      ansible.builtin.debug:
+        var: output.path

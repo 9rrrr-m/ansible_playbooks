@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MIT
+---
+__systemd_packages:
+  - systemd
+__admin_units_dir: /etc/systemd/system

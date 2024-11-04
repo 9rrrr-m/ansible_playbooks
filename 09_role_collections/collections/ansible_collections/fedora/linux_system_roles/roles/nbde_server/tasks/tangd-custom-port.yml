@@ -1,0 +1,67 @@
+---
+- name: Ensure tang port is labeled tangd_port_t for SELinux
+  include_role:
+    name: fedora.linux_system_roles.selinux
+  vars:
+    selinux_ports:
+      - ports: "{{ nbde_server_port }}"
+        proto: tcp
+        setype: tangd_port_t
+        state: present
+        local: true
+  when: nbde_server_manage_selinux | bool
+
+- name: Stat the tangd custom port systemd directory
+  stat:
+    path: "{{ __nbde_server_tangd_socket_dir }}"
+  register: __nbde_server_tangd_dir_stat
+
+- name: Get a list of files in the tangd custom directory
+  find:
+    paths: "{{ __nbde_server_tangd_socket_dir }}"
+    file_type: any
+    hidden: true
+    excludes: ["^{{ __nbde_server_tangd_socket_file_name }}$"]
+    use_regex: true
+  register: __nbde_server_tangd_socket_file_list
+  when:
+    - __nbde_server_tangd_dir_stat.stat.exists
+    - nbde_server_port | int == 80
+
+# If using default port, ensure directory does not exist
+# If not using default port, create directory
+# Do not remove the directory unless it is empty
+# Do not modify the directory if it exists
+- name: Manage tangd custom port systemd directory
+  file:
+    path: "{{ __nbde_server_tangd_socket_dir }}"
+    state: "{{ 'absent' if ((nbde_server_port | int == 80) and (__nbde_server_tangd_socket_file_list.matched | d(0) == 0)) else 'directory' }}"
+    mode: "{{ __nbde_server_tangd_dir_stat.stat.mode | d('0755') }}"
+  register: __nbde_server_custom_dir
+
+# This tasks creates the file with the port entry that we want tangd to
+# listen to
+- name: Creates the file with the port entry that we want tangd to listen to
+  template:
+    src: tangd_socket_override.conf.j2
+    dest: "{{ __nbde_server_tangd_socket_file_path }}"
+    backup: true
+    mode: "0644"
+  when: nbde_server_port | int != 80
+  register: __nbde_server_custom_file
+
+- name: Set flag to to tell main that the port has changed
+  set_fact:
+    __nbde_server_port_changed: "{{ __nbde_server_custom_dir is changed or __nbde_server_custom_file is changed }}"
+
+- name: Ensure the desired port is added to firewalld
+  include_role:
+    name: fedora.linux_system_roles.firewall
+  vars:
+    firewall:
+      - port: "{{ nbde_server_port }}/tcp"
+        zone: "{{ nbde_server_firewall_zone }}"
+        state: enabled
+        immediate: true
+        permanent: true
+  when: nbde_server_manage_firewall | bool

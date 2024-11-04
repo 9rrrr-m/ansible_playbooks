@@ -1,0 +1,79 @@
+---
+- name: Set platform/version specific variables
+  include_role:
+    name: fedora.linux_system_roles.vpn
+    tasks_from: set_vars
+    public: true
+
+- name: Extra operations on inventory hostname
+  when: not (__vpn_opportunistic | d(false) | bool)
+  block:
+    - name: Change inventory_hostname
+      set_fact:
+      # noqa var-naming[read-only]
+        inventory_hostname: "{{ __vpn_main_hostname }}"
+
+  # Sample main host is dynamically added to avoid error in VPN role
+  # that says hostvars[{{ main_hostname }}] is undefined
+    - name: Add sample main host
+      add_host:
+        name: "{{ __vpn_main_hostname }}"
+
+- name: Create nss directory for testing
+  file:
+    path: "{{ __vpn_nss_location }}"
+    state: directory
+    mode: '0600'
+
+- name: Create /etc/ipsec.d directory for testing
+  file:
+    path: "/etc/ipsec.d"
+    state: directory
+    mode: '0600'
+
+- name: Dynamically add more hosts
+  include_tasks: tasks/add_hosts.yml
+
+- name: Create sample policies directory
+  when: __vpn_opportunistic | d(false)
+  block:
+    - name: Create sample policies directory for testing
+      file:
+        path: "/etc/ipsec.d/policies"
+        state: directory
+        mode: '0600'
+
+    - name: Create sample policy files for testing
+      file:
+        path: "/etc/ipsec.d/policies/private"
+        state: touch
+        mode: "0600"
+
+    - name: Create sample policy files for testing
+      file:
+        path: "/etc/ipsec.d/policies/private-or-clear"
+        state: touch
+        mode: "0600"
+
+    - name: Create sample policy files for testing
+      file:
+        path: "/etc/ipsec.d/policies/clear"
+        state: touch
+        mode: "0600"
+
+# ostree installs firewall by default because the image must
+# have all packages used by all tests - but for some tests
+# we need to ensure firewall isn't running
+- name: Ensure firewalld not running if not testing firewall
+  service:
+    name: firewalld
+    state: stopped
+    enabled: false
+  register: __firewalld_status
+  failed_when:
+    - __firewalld_status is failed
+    - not __no_such_service in __firewalld_status.msg
+  vars:
+    __no_such_service: >-
+      Could not find the requested service firewalld:
+  when: not vpn_manage_firewall | d(false)

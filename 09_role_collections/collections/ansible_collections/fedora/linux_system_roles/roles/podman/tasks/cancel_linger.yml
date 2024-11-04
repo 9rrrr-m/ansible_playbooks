@@ -1,0 +1,95 @@
+---
+# Input:
+# * __podman_linger_user - username
+- name: Get user information
+  getent:
+    database: passwd
+    key: "{{ __podman_linger_user }}"
+    fail_key: true
+  when: "'getent_passwd' not in ansible_facts or __podman_linger_user not in ansible_facts['getent_passwd']"
+
+- name: Set cancel linger vars
+  set_fact:
+    __podman_xdg_runtime_dir: >-
+      /run/user/{{ ansible_facts["getent_passwd"][__podman_linger_user][1] }}
+
+- name: Stat XDG_RUNTIME_DIR
+  stat:
+    path: "{{ __podman_xdg_runtime_dir }}"
+  register: __podman_xdg_stat
+
+- name: Gather facts for containers
+  containers.podman.podman_container_info:
+  environment:
+    XDG_RUNTIME_DIR: "{{ __podman_xdg_runtime_dir }}"
+  become: true
+  become_user: "{{ __podman_linger_user }}"
+  when: __podman_xdg_stat.stat.exists
+  register: __podman_container_info
+
+- name: Gather facts for networks
+  command: podman network ls -q
+  register: __podman_networks
+  changed_when: false
+  environment:
+    XDG_RUNTIME_DIR: "{{ __podman_xdg_runtime_dir }}"
+  become: true
+  become_user: "{{ __podman_linger_user }}"
+  when: __podman_xdg_stat.stat.exists
+
+- name: Gather secrets
+  command: podman secret ls -n -q
+  register: __podman_linger_secrets
+  changed_when: false
+  environment:
+    XDG_RUNTIME_DIR: "{{ __podman_xdg_runtime_dir }}"
+  become: true
+  become_user: "{{ __podman_linger_user }}"
+  when: __podman_xdg_stat.stat.exists
+
+- name: Cancel linger if no more resources are in use
+  command: loginctl disable-linger {{ __podman_linger_user | quote }}
+  when:
+    - __podman_xdg_stat.stat.exists
+    - __podman_container_info.containers | length == 0
+    - __podman_networks.stdout_lines | reject("match", "^podman$") | reject("match", "^podman-default-kube-network$") | list | length == 0
+    - __podman_linger_secrets.stdout == ""
+  changed_when: true
+  register: __cancel_linger
+  args:
+    removes: /var/lib/systemd/linger/{{ __podman_linger_user }}
+
+- name: Wait for user session to exit closing state # noqa no-handler
+  command: loginctl show-user -P State {{ __podman_linger_user | quote }}
+  register: __user_state
+  changed_when: false
+  until: __user_state.stdout != "closing"
+  when: __cancel_linger is changed
+  ignore_errors: true
+
+# see https://github.com/systemd/systemd/issues/26744#issuecomment-2261509208
+- name: Handle user stuck in closing state
+  when:
+    - __cancel_linger is changed
+    - __user_state is failed
+  block:
+    - name: Stop logind
+      service:
+        name: systemd-logind
+        state: stopped
+
+    - name: Wait for user session to exit closing state
+      command: loginctl show-user -P State {{ __podman_linger_user | quote }}
+      changed_when: false
+      register: __user_state
+      until: __user_state.stderr is match(__pat) or __user_state.stdout != "closing"
+      failed_when:
+        - not __user_state.stderr is match(__pat)
+        - __user_state.stdout == "closing"
+      vars:
+        __pat: "Failed to get user: User ID .* is not logged in or lingering"
+
+    - name: Restart logind
+      service:
+        name: systemd-logind
+        state: started

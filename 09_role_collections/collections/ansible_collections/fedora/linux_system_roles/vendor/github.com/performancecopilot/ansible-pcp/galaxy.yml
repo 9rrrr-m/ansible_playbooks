@@ -1,0 +1,50 @@
+---
+### REQUIRED
+namespace: performancecopilot
+name: metrics
+version: 2.3.0
+readme: README.md
+authors:
+  - Jan Kurik <jkurik@redhat.com>
+  - Nathan Scott <nathans@redhat.com>
+  - Rich Megginson <rmeggins@redhat.com>
+  - Sergei Petrosian <spetrosi@redhat.com>
+
+### OPTIONAL
+description: Performance Co-Pilot Ansible collection
+license_file: 'LICENSE'
+repository: https://github.com/performancecopilot/ansible-pcp
+documentation: https://pcp.readthedocs.io
+homepage: https://pcp.io
+issues: https://github.com/performancecopilot/ansible-pcp/issues
+tags:
+  - metrics
+  - analysis
+  - telemetry
+  - monitoring
+  - timeseries
+  - performance
+  - lightweight
+  - visualization
+  - instrumentation
+  - observability
+  - grafana
+  - redis
+  - pcp
+build_ignore:
+  - .ansible-lint
+  - .github
+  - .gitignore
+  - .lgtm.yml
+  - .yamllint.yml
+  - .yamllint_defaults.yml
+  - ansible_pytest_extra_requirements.txt
+  - custom_requirements.txt
+  - molecule_extra_requirements.txt
+  - pylint_extra_requirements.txt
+  - pytest_extra_requirements.txt
+  - tests
+  - tox.ini
+
+dependencies:
+  ansible.posix: '*'  # for rpm-ostree

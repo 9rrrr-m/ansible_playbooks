@@ -1,0 +1,4 @@
+INVENTORY_HOSTNAME = inventoryhostname
+TOTAL_MEM = totalmem
+BIOS_VER = biosversion
+SDA_SIZE = sdasize

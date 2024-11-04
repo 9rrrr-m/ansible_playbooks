@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+---
+
+- name: Restart the verifier
+  service:
+    name: "{{ __keylime_server_verifier_service }}"
+    state: restarted
+
+- name: Make sure the verifier is up and running
+  ansible.builtin.wait_for:
+    host: "{{ keylime_server_verifier_ip }}"
+    port: "{{ keylime_server_verifier_port }}"
+
+- name: Restart the registrar
+  service:
+    name: "{{ __keylime_server_registrar_service }}"
+    state: restarted

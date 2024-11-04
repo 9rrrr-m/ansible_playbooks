@@ -1,0 +1,92 @@
+---
+- name: Test cockpit_* role options
+  hosts: all
+  gather_facts: false
+  roles:
+    - role: fedora.linux_system_roles.cockpit
+      vars:
+        cockpit_packages: minimal
+        cockpit_enabled: true
+        cockpit_started: false
+        cockpit_config:
+          WebService:
+            LoginTitle: "hello world"
+          Session:
+            IdleTimeout: 60
+        cockpit_manage_firewall: false
+        cockpit_manage_selinux: true
+      public: true
+
+  tasks:
+    - name: Tests
+      block:
+      # For now, keeping this task in-place. Can be moved to a separate task
+      # file in case this is needed in other tests.
+      # Without this task, the test fails on Ansible-2.14 on RHEL 8.10
+        - name: Ensure ansible_facts used by this test
+          vars:
+            __cockpit_test_facts:
+              - python_version
+            __cockpit_test_facts_subsets: "{{ ['!all', '!min'] + __cockpit_test_facts }}"
+          setup:
+            gather_subset: "{{ __cockpit_test_facts_subsets }}"
+          when: __cockpit_test_facts | difference(ansible_facts.keys() | list) | length > 0
+
+        - name: Flush handlers
+          meta: flush_handlers
+
+        - name: Test - socket is enabled
+        # noqa command-instead-of-module
+          command: systemctl is-enabled {{ __cockpit_daemon }}
+          changed_when: false
+
+        - name: Test - socket is not active
+        # noqa command-instead-of-module
+          command: systemctl is-active {{ __cockpit_daemon }}
+          register: result
+          failed_when: result is succeeded
+          changed_when: false
+
+        - name: Refresh package facts
+          package_facts:
+
+        - name: Test - cockpit-bridge is installed
+          fail:
+            msg: cockpit-bridge is not installed
+          when: "'cockpit-bridge' not in ansible_facts.packages"
+
+        - name: Test - cockpit metapackage is not installed
+          fail:
+            msg: cockpit is unexpectedly installed
+          when:
+            - "'cockpit' in ansible_facts.packages"
+            - not __cockpit_is_ostree | d(false)
+
+        - name: Test - write expected configuration file
+          copy:
+            content: |+
+              #
+              # Ansible managed
+              #
+              # system_role:cockpit
+
+              [Session]
+              IdleTimeout = 60
+
+              [WebService]
+              LoginTitle = hello world
+
+            dest: /run/cockpit.conf.expected
+            mode: "0600"
+
+        - name: Test - compare generated with expected configuration file
+          command: diff -u /run/cockpit.conf.expected /etc/cockpit/cockpit.conf
+          changed_when: false
+
+        - name: >-
+            Test - ensure cockpit_port is configured for firewall and selinux
+          include_tasks: tasks/check_port.yml
+
+      always:
+        - name: Cleanup
+          include_tasks: tasks/cleanup.yml

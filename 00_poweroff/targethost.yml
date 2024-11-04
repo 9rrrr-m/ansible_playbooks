@@ -1,0 +1,9 @@
+---
+- name: 0) 모든 [관리 대상 호스트] 전원 끄기
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: 1) 전원 끄기
+      community.general.shutdown:
+        delay: 0
+      ignore_errors: true

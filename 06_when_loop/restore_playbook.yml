@@ -1,0 +1,28 @@
+---
+- name: Restore playbook.yml
+  hosts: all
+  gather_facts: false
+  vars:
+    mariadb_packages:
+      - mariadb-server
+      - python3-PyMySQL
+    db_svc: mariadb
+  tasks:
+    # ---------------------------------------------- #
+    # 1) 서비스 중지 - mariadb
+    # 2) 패키지 삭제 - mariadb-server, python3-PyMySQL
+    # ---------------------------------------------- #
+
+    # 1) 서비스 중지 - mariadb
+    - name: 1) 서비스 중지 - {{ db_svc }}
+      ansible.builtin.systemd:
+        name: "{{ db_svc }}"
+        state: stopped
+        enabled: false
+
+    # 2) 패키지 삭제 - mariadb-server, python3-PyMySQL
+    - name: 2) 패키지 삭제 - mariadb-server, python3-PyMySQL
+      ansible.builtin.dnf:
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ mariadb_packages }}"

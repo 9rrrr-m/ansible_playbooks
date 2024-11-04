@@ -1,0 +1,143 @@
+---
+- name: Basic test for fapolicyd
+  hosts: all
+  gather_facts: true # needed for python executable discovery
+  tasks:
+    - name: Run tests
+      vars:
+        __test_fpd_exec_dir: >-
+          {{ __fapolicyd_tmpdir.path }}/executables
+        __test_fpd_exe1: "{{ __test_fpd_exec_dir }}/exe1"
+        __test_fpd_exe2: "{{ __test_fpd_exec_dir }}/exe2"
+        __test_fpd_user: fapolicyd_test1_user
+      block:
+      # NOTE - to debug a failing execution:
+      # - ensure the user has permission to read/execute the file
+      #   and all directories leading to the file
+      # use a shell: like this:
+      # shell: |
+      #   systemctl stop fapolicyd
+      #   fapolicyd --debug-deny > /var/log/fapolicyd.log 2>&1 &
+      #   run the command that causes the deny
+      #   kill %1
+      #   cat /var/log/fapolicyd.log
+        - name: Create temp test directory
+          tempfile:
+            path: /var/tmp
+            prefix: fapolicyd_
+            state: directory
+          register: __fapolicyd_tmpdir
+
+        - name: Create directories for tests
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: "0755"
+          loop:
+            - "{{ __fapolicyd_tmpdir.path }}"
+            - "{{ __test_fpd_exec_dir }}"
+
+        - name: Create shell executables
+          copy:
+            content: |
+              #!{{ __python }}
+              # this is item {{ item }}
+              import sys
+              sys.exit(0)
+            dest: "{{ item }}"
+            mode: "0755"
+          loop:
+            - "{{ __test_fpd_exe1 }}"
+            - "{{ __test_fpd_exe2 }}"
+          vars:
+            __python: "{{ ansible_python_interpreter | d(discovered_interpreter_python) }}"
+
+        - name: Create a new user
+          user:
+            name: "{{ __test_fpd_user }}"
+            state: present
+            shell: /bin/bash
+
+        - name: Run the role
+          include_role:
+            name: fedora.linux_system_roles.fapolicyd
+          vars:
+            fapolicyd_setup_integrity: sha256
+            fapolicyd_setup_trust: rpmdb,file
+            fapolicyd_add_trusted_file:
+              - /etc/passwd
+              - /etc/fapolicyd/fapolicyd.conf
+              - /etc/krb5.conf
+              - "{{ __test_fpd_exe1 }}"
+
+        - name: Run trusted binary exe1
+          command: >-
+            su - {{ __test_fpd_user | quote }} -c
+            {{ __test_fpd_exe1 | quote }}
+          changed_when: false
+
+        - name: Replace binary exe1 with exe2
+          copy:
+            src: "{{ __test_fpd_exe2 }}"
+            dest: "{{ __test_fpd_exe1 }}"
+            remote_src: true
+            mode: "0755"
+
+        - name: Run untrusted binary exe2
+          command: >-
+            su - {{ __test_fpd_user | quote }} -c
+            {{ __test_fpd_exe2 | quote }}
+          register: run_exe
+          changed_when: false
+          failed_when: run_exe.rc != 126
+
+        - name: Check now untrusted exe1 after replacement
+          command: >-
+            su - {{ __test_fpd_user | quote }} -c
+            {{  __test_fpd_exe1 | quote }}
+          register: run_exe
+          changed_when: false
+          failed_when: run_exe.rc != 126
+
+        - name: Run the role again without test file
+          include_role:
+            name: fedora.linux_system_roles.fapolicyd
+          vars:
+            fapolicyd_setup_integrity: sha256
+            fapolicyd_setup_trust: rpmdb,file
+            fapolicyd_add_trusted_file: []
+
+        - name: Run untrusted exe1 after removing from trustdb
+          command: >-
+            su - {{ __test_fpd_user | quote }} -c
+            {{ __test_fpd_exe1 | quote }}
+          register: run_exe
+          changed_when: false
+          failed_when: run_exe.rc != 126
+      always:
+        - name: Shutdown fapolicyd
+          service:
+            name: fapolicyd
+            state: stopped
+            enabled: false
+
+        - name: Clean up temp directory
+          file:
+            path: "{{ __fapolicyd_tmpdir.path }}"
+            state: absent
+
+        - name: Remove test user
+          user:
+            name: "{{ __test_fpd_user }}"
+            state: absent
+          register: __result
+          until: __result is success
+          ignore_errors: true # noqa ignore-errors
+
+      # when user removal fails, it seems some process is
+      # still using the user - see which one it is
+        - name: Debug test user removal failure
+          command: ps -ef
+          when: __result is failed
+          failed_when: __result is failed
+          changed_when: false

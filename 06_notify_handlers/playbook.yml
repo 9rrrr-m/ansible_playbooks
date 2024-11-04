@@ -1,0 +1,67 @@
+---
+- name: 0) MariaDB 설치
+  hosts: databases
+  vars:
+    db_packages:
+      - mariadb-server
+      - python3-PyMySQL
+    db_service: mariadb
+    resources_url: http://ansible.example.com
+    config_file_url: "{{ resources_url }}/my.cnf.standard"
+    config_file_dst: /etc/my.cnf
+  tasks:
+    - name: 1) {{ db_packages }} 설치
+      ansible.builtin.dnf:
+        name: "{{ db_packages }}"
+        state: present
+      notify:
+        - mysql_secure_installation
+        - set_db_password
+
+    - name: 2) DB 서비스 기동
+      ansible.builtin.systemd:
+        name: "{{ db_service }}"
+        state: started
+        enabled: true
+
+    - name: 3) 설정 파일 가져오기 - {{ config_file_dst }}
+      ansible.builtin.get_url:
+        url: "{{ config_file_url }}"
+        dest: "{{ config_file_dst }}"
+        owner: mysql
+        group: mysql
+        force: true
+      notify:
+        - restart_db_service
+
+  handlers:
+    - name: restart_db_service
+      ansible.builtin.systemd:
+        name: "{{ db_service }}"
+        state: restarted
+
+    - name: mysql_secure_installation
+      become: true    # 반드시 root로 작업
+      ansible.builtin.expect:
+        command: mysql_secure_installation
+        responses:
+          'Enter current password for root': ''
+          'Switch to unix_socket authentication': 'Y'
+          'Change the root password?': 'Y'
+          'New password': 'redhat'
+          'Re-enter new password': 'redhat'
+          'Remove anonymous users?': 'Y'
+          'Disallow root login remotely?': 'Y'
+          'Remove test database and access to it?': 'Y'
+          'Reload privilege tables now?': 'Y'
+          timeout: 1
+
+    - name: set_db_password
+      become: true
+      community.mysql.mysql_user:
+        login_user: root
+        login_password: redhat
+        name: soldesk
+        password: soldesk1.
+        priv: '*.*:ALL'
+        state: present

@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Example ha_cluster role invocation - cluster with SBD
+  hosts: node1 node2
+  vars:
+    my_sbd_devices:
+  # This variable is not used by the role.
+  # It's purpose is to define SBD devices once so they don't need
+  # to be repeated several times in the role variables.
+      - /dev/disk/by-id/000001
+      - /dev/disk/by-id/000002
+      - /dev/disk/by-id/000003
+    ha_cluster_manage_firewall: true
+    ha_cluster_manage_selinux: true
+    ha_cluster_cluster_name: my-new-cluster
+    ha_cluster_hacluster_password: password
+    ha_cluster_sbd_enabled: true
+    ha_cluster_sbd_options:
+      - name: delay-start
+        value: 'no'
+      - name: startmode
+        value: always
+      - name: timeout-action
+        value: 'flush,reboot'
+      - name: watchdog-timeout
+        value: 30
+    ha_cluster_node_options:
+      - node_name: node1
+        sbd_watchdog_modules:
+          - iTCO_wdt
+        sbd_watchdog_modules_blocklist:
+          - ipmi_watchdog
+        sbd_watchdog: /dev/watchdog1
+        sbd_devices: "{{ my_sbd_devices }}"
+      - node_name: node2
+        sbd_watchdog_modules:
+          - iTCO_wdt
+        sbd_watchdog_modules_blocklist:
+          - ipmi_watchdog
+        sbd_watchdog: /dev/watchdog1
+        sbd_devices: "{{ my_sbd_devices }}"
+# Best practice for setting SBD timeouts:
+# watchdog-timeout * 2 = msgwait-timeout (set automatically)
+# msgwait-timeout * 1.2 = stonith-timeout
+    ha_cluster_cluster_properties:
+      - attrs:
+          - name: stonith-timeout
+            value: 72
+    ha_cluster_resource_primitives:
+      - id: fence_sbd
+        agent: 'stonith:fence_sbd'
+        instance_attrs:
+          - attrs:
+              - name: devices
+                value: "{{ my_sbd_devices | join(',') }}"
+              - name: pcmk_delay_base
+                value: 30
+
+  roles:
+    - fedora.linux_system_roles.ha_cluster

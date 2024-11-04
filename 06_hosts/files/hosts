@@ -1,0 +1,13 @@
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+#
+# Ansible Server List
+#
+192.168.10.10  ansible.example.com      ansible      control.example.com  control
+192.168.10.11  ansible1.example.com     ansible1     web1.example.com     web1
+192.168.10.12  ansible2.example.com     ansible2     web2.example.com     web2
+192.168.10.13  ansible3.example.com     ansible3     web3.example.com     web3    db1
+192.168.10.14  ansible4.example.com     ansible4     web4.example.com     web4    db2
+192.168.10.20  ansibletest.example.com  ansibletest  test.example.com     test
+

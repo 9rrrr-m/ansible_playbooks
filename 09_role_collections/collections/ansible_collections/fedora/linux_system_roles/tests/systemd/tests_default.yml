@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Ensure that the role runs with no arguments
+  hosts: all
+  gather_facts: false
+  roles:
+    - fedora.linux_system_roles.systemd

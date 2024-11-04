@@ -1,0 +1,9 @@
+---
+- name: Selinux mode change
+  hosts: all
+  tasks:
+    - name: Selinux mode - permissive -> enforcing
+      ansible.builtin.lineinfile:
+        path: /etc/selinux/config
+        regexp: ^SELINUX=
+        line: SELINUX=enforcing

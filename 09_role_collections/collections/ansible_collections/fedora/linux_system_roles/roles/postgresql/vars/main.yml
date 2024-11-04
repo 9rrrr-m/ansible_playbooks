@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MIT
+---
+# Put the role's internal variables here that are not distribution specific.
+# You can override these by defining the same variable with a different
+# value in a platform/version specific file in vars/
+
+# Examples of non-distribution specific (generic) internal variables:
+__postgresql_packages: [postgresql-server]
+__postgresql_versions_el8: ["10", "12", "13", "15", "16"]
+__postgresql_versions_el9: ["13", "15", "16"]
+__postgresql_versions_el10: ["16"]
+
+__postgresql_data_dir: /var/lib/pgsql/data
+
+__postgresql_main_conf_file: "{{ __postgresql_data_dir }}/postgresql.conf"
+__postgresql_hba_conf_file: "{{ __postgresql_data_dir }}/pg_hba.conf"
+__postgresql_conf_file: /etc/postgresql/system-roles.conf
+__postgresql_internal_conf_file: /etc/postgresql/system-roles-internal.conf
+
+# ansible_facts required by the role
+__postgresql_required_facts:
+  - distribution
+  - distribution_major_version
+  - distribution_version
+  - os_family
+  - ansible_memory_mb
+
+# these facts cannot be used as a gather_subset
+__postgresql_no_subset_facts: [ansible_memory_mb]
+
+# the subsets of ansible_facts that need to be gathered in case any of the
+# facts in required_facts is missing; see the documentation of
+# the 'gather_subset' parameter of the 'setup' module
+__postgresql_required_facts_subsets: "{{ ['!all', '!min', 'hardware'] + __postgresql_required_facts | difference(__postgresql_no_subset_facts) }}"

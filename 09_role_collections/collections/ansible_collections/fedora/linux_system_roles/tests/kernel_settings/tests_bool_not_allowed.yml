@@ -1,0 +1,33 @@
+---
+- name: Test boolean values not allowed
+  hosts: all
+  tasks:
+    - name: Validate no boolean values for sysctl values
+      block:
+        - name: Try to pass a boolean value for sysctl value
+          include_role:
+            name: fedora.linux_system_roles.kernel_settings
+            public: true
+          vars:
+            kernel_settings_sysctl:
+              - name: valid_value
+                value: "true"
+              - name: somevalue
+                value: yes # yamllint disable-line rule:truthy
+              - name: anothervalue
+                value: no # yamllint disable-line rule:truthy
+
+        - name: Unreachable task
+          fail:
+            msg: UNREACH
+
+      rescue:
+        - name: Check for sysctl bool value error
+          assert:
+            that: ansible_failed_result.msg != 'UNREACH'
+
+      always:
+        - name: Cleanup
+          tags:
+            - tests::cleanup
+          include_tasks: tasks/cleanup.yml

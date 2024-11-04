@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Check if elasticsearch PMDA is installed in the filesystem
+  command: test -d "/var/lib/pcp/pmdas/elasticsearch"
+  changed_when: false
+
+- name: Check if elasticsearch PMDA is registered with pmcd
+  command: pmprobe -I pmcd.agent.status
+  register: status
+  until: status.stdout.find("elasticsearch") != -1
+  retries: 10
+  delay: 1
+  changed_when: false

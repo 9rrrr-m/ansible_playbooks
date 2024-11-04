@@ -1,0 +1,18 @@
+---
+# vars file for roles/rollback_playbook
+fw_rules:
+  - http
+  - https
+
+services:
+  - httpd
+  - firewalld
+
+web_settings:
+  - /etc/httpd/conf.d/vhost.conf
+  - /var/www/html/index.html
+  - /var/www/vhosts
+
+pkgs:
+  - httpd
+  - mod_ssl

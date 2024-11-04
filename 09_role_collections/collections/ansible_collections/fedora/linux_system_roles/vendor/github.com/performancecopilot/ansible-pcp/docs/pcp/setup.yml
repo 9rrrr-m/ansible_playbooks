@@ -1,0 +1,11 @@
+---
+- name: Example of basic pcp setup
+  hosts: all
+  roles:
+    - role: performancecopilot.metrics.pcp
+      vars:
+        pcp_pmie_endpoint: https://example.com/webhook
+        pcp_pmlogger_interval: 10
+        pcp_optional_agents: [dm, nfsclient, openmetrics]
+        pcp_explicit_labels:
+          environment: production

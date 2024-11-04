@@ -1,0 +1,7 @@
+---
+- name: Deploy Postgresql server and run provided SQL script
+  hosts: localhost
+  vars:
+    postgresql_input_file: "examples/simple.sql"
+  roles:
+    - fedora.linux_system_roles.postgresql

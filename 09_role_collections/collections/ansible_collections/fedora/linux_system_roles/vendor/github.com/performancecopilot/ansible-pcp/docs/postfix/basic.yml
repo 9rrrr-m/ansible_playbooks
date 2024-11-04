@@ -1,0 +1,5 @@
+---
+- name: Example of postfix
+  hosts: monitoring
+  roles:
+    - role: performancecopilot.metrics.postfix

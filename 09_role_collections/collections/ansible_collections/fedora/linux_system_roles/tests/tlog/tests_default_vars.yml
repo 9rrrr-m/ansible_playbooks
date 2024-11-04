@@ -1,0 +1,19 @@
+---
+- name: Ensure that the role declares all parameters in defaults
+  hosts: all
+  roles:
+    - fedora.linux_system_roles.tlog
+  pre_tasks:
+    - name: Test setup and check for ostree
+      include_tasks: tasks/setup.yml
+  tasks:
+    - name: Check that all variables are defined
+      assert:
+        that: "vars[item] is defined"
+      loop:
+        - tlog_use_sssd
+        - tlog_scope_sssd
+        - tlog_users_sssd
+        - tlog_groups_sssd
+        - tlog_exclude_users_sssd
+        - tlog_exclude_groups_sssd

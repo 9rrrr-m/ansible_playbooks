@@ -1,0 +1,67 @@
+---
+# Play 01. 웹 서버 구축
+- name: Play 01. 웹 서버 구축 - 변수 테스트
+  hosts: webserver
+  vars:
+    web_pkg: httpd
+    firewall_pkg: firewalld
+    web_service: httpd
+    firewall_service: firewalld
+    python_pkg: python3-PyMySQL
+    open_service: http
+  tasks:
+    # ------------------------- #
+    # 1) 패키지 설치 - web_pkg, firewall_pkg, python_pkg
+    # 2) 웹 서버 설정 - /var/www/html/index.html
+    # 3) 웹 서비스 기동 - httpd
+    # 4) 방화벽 등록 - http
+    # ------------------------- #
+
+    # 1) 패키지 설치 - web_pkg, firewall_pkg, python_pkg
+    - name: 1) 패키지 설치
+      ansible.builtin.dnf:
+        name:
+          - "{{ web_pkg }}"
+          - "{{ firewall_pkg }}"
+          - "{{ python_pkg }}"
+        state: present
+
+    # 2) 웹 서버 설정 - /var/www/html/index.html
+    - name: 2) 웹 서버 설정 - /var/www/html/index.html
+      ansible.builtin.copy:
+        content: "This is Web1 server."
+        dest: /var/www/html/index.html
+        mode: '0644'
+
+    # 3) 웹 서비스 기동
+    - name: 3) 웹 서비스 기동 - {{ web_service }}
+      ansible.builtin.systemd:
+        service: "{{ web_service }}"
+        state: started
+        enabled: true
+    - name: 3) 웹 서비스 기동 - {{ firewall_service }}
+      ansible.builtin.systemd:
+        service: "{{ firewall_service }}"
+        state: started
+        enabled: true
+
+    # 4) 방화벽 등록
+    - name: 4) 방화벽 등록 - {{ open_service }}
+      ansible.posix.firewalld:
+        service: "{{ open_service }}"
+        permanent: true
+        immediate: true
+        state: enabled
+
+# Play 02. 웹 서버 확인
+- name: Play 02. 웹 서버 확인
+  hosts: localhost
+  become: false
+  tasks:
+    - name: 웹 요청 확인
+      ansible.builtin.uri:
+        url: http://web1
+        status_code: 200
+      register: web_results
+    - name: Debug
+      ansible.builtin.debug: var=web_results

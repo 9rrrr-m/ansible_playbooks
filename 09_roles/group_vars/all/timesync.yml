@@ -1,0 +1,6 @@
+---
+timesync_ntp_provider: chrony
+
+timesync_ntp_servers:
+  - hostname: kr.pool.ntp.org
+    iburst: true

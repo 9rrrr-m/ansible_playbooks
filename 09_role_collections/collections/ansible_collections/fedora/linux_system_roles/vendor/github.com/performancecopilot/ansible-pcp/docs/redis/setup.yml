@@ -1,0 +1,5 @@
+---
+- name: Example of redis
+  hosts: all
+  roles:
+    - role: performancecopilot.metrics.redis

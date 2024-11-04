@@ -1,0 +1,176 @@
+---
+- name: Set platform/version specific variables
+  include_tasks: set_vars.yml
+
+- name: System check
+  fail:
+    msg:
+      - Only Enterprise Linux >= 8.1 and Fedora are supported
+      - System - {{ ansible_facts.os_family }}
+      - Version - {{ ansible_facts.distribution_version }}
+  when: not __fapolicyd_supported
+
+- name: Check trust compatibility
+  fail:
+    msg: >-
+      Fapolicyd does not support trust setting fapolicyd_setup_trust
+      on EL version < 8.3
+  ignore_errors: true
+  when:
+    - fapolicyd_setup_trust | length > 0
+    - not __fapolicyd_trust_supported
+  register: __failed_check_trust
+
+- name: Check integrity compatibility
+  fail:
+    msg: >-
+      Fapolicyd does not support integrity setting fapolicyd_setup_integrity
+      on EL version < 8.4
+  ignore_errors: true
+  when:
+    - fapolicyd_setup_integrity | length > 0
+    - not __fapolicyd_integrity_supported
+  register: __failed_check_integrity
+
+- name: Check trust files compatibility
+  fail:
+    msg: >-
+      Fapolicyd does not support trust files setting fapolicyd_add_trusted_file
+      on EL version < 8.4
+  ignore_errors: true
+  when:
+    - fapolicyd_add_trusted_file | length > 0
+    - not __fapolicyd_trustfiles_supported
+  register: __failed_check_trusted_file
+
+- name: Check failed conditions
+  fail:
+    msg: Multiple failed conditions
+  when: __failed_check_trust is failed or __failed_check_integrity is failed or __failed_check_trusted_file is failed
+
+- name: Install fapolicyd packages
+  package:
+    name: "{{ __pkgs }}"
+    state: present
+    use: "{{ (__fapolicyd_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+  vars:
+    __pkgs: "{{ __fapolicyd_packages + (__fapolicyd_selinux_packages if __fapolicyd_selinux_supported else []) }}"
+
+- name: Copy fapolicyd configuration file
+  template:
+    src: "{{ __fapolicyd_conf }}.j2"
+    dest: "{{ __fapolicyd_dir }}/{{ __fapolicyd_conf }}"
+    owner: root
+    group: fapolicyd
+    mode: "0644"
+  register: __fapolicy_conf
+
+- name: Run fapolicyd configuration check
+  command: fapolicyd-cli --check-config
+  check_mode: false
+  changed_when: false
+  when:
+    - __fapolicyd_configcheck_supported | bool
+    - __fapolicy_conf is changed
+
+- name: Start fapolicyd service
+  service:
+    name: "{{ __fapolicyd_services }}"
+    state: started
+    enabled: true
+  when: fapolicyd_setup_enable_service | bool
+  ignore_errors: true
+  register: __fapolicyd_start
+
+- name: Restart fapolicyd service
+  service:
+    name: "{{ __fapolicyd_services }}"
+    state: restarted
+    enabled: true
+  when:
+    - fapolicyd_setup_enable_service | bool
+    - __fapolicy_conf is changed
+  ignore_errors: true
+  register: __fapolicyd_restart
+
+- name: Check fapolicyd logs
+  command: journalctl -n5 -u {{ __fapolicyd_services | quote }}
+  register: __fapolicyd_results
+  changed_when: false
+  when: __fapolicyd_start is failed or __fapolicyd_restart is failed
+  failed_when: __fapolicyd_start is failed or __fapolicyd_restart is failed
+
+- name: Trustdb cleanup
+  command: fapolicyd-cli --file delete /
+  changed_when: true
+  failed_when: false
+
+- name: Add file to trustdb
+  command: fapolicyd-cli --file add {{ item | quote }}
+  loop: "{{ (fapolicyd_add_trusted_file is string) | ternary([fapolicyd_add_trusted_file], fapolicyd_add_trusted_file) }}"
+  when: item | length > 0
+  changed_when: true
+
+# The problem is that there is a race condition between calling `systemctl
+# restart fapolicyd`` and when fapolicyd will actually enforce the policy - so
+# we have to look for the right string in the fapolicyd logs.  Also - I don't
+# think we can move this into a script, because that script might be excluded by
+# policy!
+# NOTE: I tried using `fapolicyd-cli --update` as recommended by the
+# documentation but it does not seem to work in all cases e.g. on RHEL 8.8 if
+# you are deleting entries but not adding entries, it seems to do nothing - the
+# only reliable way to update the trustdb is to restart the daemon and check for
+# "fapolicyd[...]: Starting to listen for events" in the journald output
+- name: Update fapolicyd db
+  when: fapolicyd_setup_enable_service | bool
+  shell:
+    cmd: |
+      set -euo pipefail
+      # get current journal cursor
+      cursor=""
+      while [ -z "$cursor" ]; do
+        sleep 1
+        cursor="$(journalctl -u fapolicyd -n 0 --show-cursor |
+          awk '/^-- cursor:/ {print $3}')" || :
+      done
+      systemctl restart fapolicyd
+      search_str='^Starting to listen for events$'
+      # wait until we see the search_str - wait up to 30 seconds
+      waittime=30  # seconds
+      endtime="$(expr "$(date +%s)" + "$waittime")"
+      found=0
+      prev_cursor="$cursor"
+      # NOTE: Cannot use -u fapolicyd - for some reason, on el10, sometime during
+      # the startup process, the UNIT field is dropped from fapolicyd journal
+      # entries - so use -t instead which relies on SYSLOG_IDENTIFIER which seems stable
+      while [ "$(date +%s)" -le "$endtime" ]; do
+        prev_cursor="$cursor"
+        output="$(journalctl -t fapolicyd --grep "$search_str" --show-cursor --after-cursor "$cursor" || :)"
+        found=1
+        while read -r line; do
+          if [ "$line" = "-- No entries --" ]; then
+            found=0
+          elif [[ "$line" =~ ^--\ cursor:\ (.+)$ ]]; then
+            cursor="${BASH_REMATCH[1]}"  # update cursor for next try
+          fi
+        done <<< "$output"
+        if [ "$found" = 1 ]; then
+          break
+        fi
+        sleep 1
+      done
+      if [ "$found" = 0 ]; then
+          echo ERROR: failed to update the trustdb
+          journalctl -t fapolicyd
+          exit 1
+      fi
+      echo INFO: trustdb is updated
+      exit 0  # success
+  changed_when: true
+
+- name: Making sure fapolicyd does not run if it was set so
+  service:
+    name: "{{ __fapolicyd_services }}"
+    state: stopped
+    enabled: false
+  when: not fapolicyd_setup_enable_service

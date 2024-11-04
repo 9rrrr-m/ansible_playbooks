@@ -1,0 +1,66 @@
+---
+# Expected behavior of nbde_server_fetch_keys is the following:
+# - if nbde_server_deploy_keys is also set, we fetch the keys of
+#   the first host in the inventory, and use these keys to deploy
+#   in every host. The keys are placed in the top level directory
+#   of nbde_server_keys_dir.
+# - if nbde_server_deploys keys is not set, we fetch the keys of
+#   every host and place them in a directory named after the host,
+#   inside nbde_server_keys_dir.
+
+- name: Test nbde_server_fetch_keys with nbde_server_deploy_keys not set
+  hosts: all
+  tasks:
+    - name: Run tests
+      block:
+        - name: Create tmpdir for server keys
+          tempfile:
+            state: directory
+            prefix: nbde_server_fetch_keys_deploy_not_set
+          register: __tmpdir
+          delegate_to: localhost
+
+        - name: Set nbde_server_keys_dir
+          set_fact:
+            nbde_server_keys_dir: "{{ __tmpdir.path }}"
+
+        - name: Ensure we have keys
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+
+        - name: Gather keys
+          find:
+            paths: "{{ __nbde_server_keydir }}"
+            hidden: true
+            patterns:
+              - "*.jwk"
+              - ".*.jwk"
+          register: nbde_server_host_keys
+
+        - name: Run with nbde_server_deploy_keys not set to check the keys
+          include_role:
+            name: fedora.linux_system_roles.nbde_server
+            public: true
+          vars:
+            nbde_server_rotate_keys: false
+            nbde_server_fetch_keys: true
+            nbde_server_deploy_keys: false
+
+        - name: Check whether the keys were properly fetched
+          stat:
+            path: "{{ nbde_server_keys_dir }}/{{ inventory_hostname }}/{{ item.path | basename }}" # yamllint disable-line rule:line-length
+          loop: "{{ nbde_server_host_keys.files }}"
+          delegate_to: localhost
+          register: nbde_server_local_keys
+
+        - name: Verify the common keys are correct
+          assert:
+            that: item.stat.exists
+          loop: "{{ nbde_server_local_keys.results }}"
+      always:
+        - name: Cleanup
+          tags: tests::cleanup
+          include_tasks: tasks/cleanup.yml
+
+# vim:set ts=2 sw=2 et:

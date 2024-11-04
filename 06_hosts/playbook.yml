@@ -1,0 +1,13 @@
+---
+- name: 0) /etc/hosts 파일 배포
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: /etc/hosts 파일 배포
+      # files/hosts -> /etc/hosts
+      ansible.builtin.copy:
+        src: files/hosts
+        dest: /etc/hosts
+        owner: root
+        group: root
+        mode: '0644'

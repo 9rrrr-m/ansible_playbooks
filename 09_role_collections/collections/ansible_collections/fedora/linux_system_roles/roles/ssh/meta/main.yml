@@ -1,0 +1,56 @@
+---
+galaxy_info:
+  author: Jakub Jelen
+  description: OpenSSH SSH client configuration
+  company: Red Hat Inc.
+  license: LGPGv3
+  min_ansible_version: "2.9"
+  platforms:
+    - name: EL
+      versions:
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+    - name: Fedora
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - "wheezy"
+        - "jessie"
+        - "stretch"
+        - "buster"
+    - name: Ubuntu
+      versions:
+        - "precise"
+        - "trusty"
+        - "xenial"
+        - "bionic"
+        - "focal"
+        - "jammy"
+  galaxy_tags:
+    - centos
+    - client
+    - debianbuster
+    - debianjessie
+    - debianstretch
+    - debianwheezy
+    - el6
+    - el7
+    - el8
+    - el9
+    - el10
+    - fedora
+    - networking
+    - openssh
+    - redhat
+    - ssh
+    - system
+    - ubuntubionic
+    - ubuntufocal
+    - ubuntujammy
+    - ubuntuprecise
+    - ubuntutrusty
+    - ubuntuxenial
+dependencies: []

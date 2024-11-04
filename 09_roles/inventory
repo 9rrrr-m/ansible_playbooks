@@ -1,0 +1,14 @@
+[asia_datacenter]
+ansible1.example.com
+ansible2.example.com
+
+[europe_datacenter]
+ansible3.example.com
+
+[northamerica_datacenter]
+ansible4.example.com
+
+[datacenters:children]
+asia_datacenter
+europe_datacenter
+northamerica_datacenter

@@ -1,0 +1,35 @@
+---
+- name: Verify snapshot action fails if no space is available
+  hosts: all
+  vars:
+  # only use vgs matching this pattern
+    snapshot_lvm_vg_include: "^test_"
+    test_disk_min_size: "1g"
+    test_disk_count: 10
+    test_storage_pools:
+      - name: test_vg1
+        disks: "{{ range(0, 3) | map('extract', unused_disks) | list }}"
+        volumes:
+          - name: lv1
+            size: "100%"
+  tasks:
+    - name: Run tests
+      block:
+        - name: Setup
+          include_tasks: tasks/setup.yml
+
+        - name: Test failure of creating snapshot
+          include_tasks: verify-role-failed.yml
+          vars:
+            __snapshot_failed_regex: insufficient space for snapshots
+            __snapshot_failed_msg: Role did not fail with no space error
+            __snapshot_failed_params:
+              snapshot_lvm_percent_space_required: 15
+              snapshot_all: true
+              snapshot_lvm_snapset_name: snapset1
+              snapshot_lvm_action: snapshot
+            __snapshot_failed_changed: false
+      always:
+        - name: Cleanup
+          include_tasks: tasks/cleanup.yml
+          tags: tests::cleanup

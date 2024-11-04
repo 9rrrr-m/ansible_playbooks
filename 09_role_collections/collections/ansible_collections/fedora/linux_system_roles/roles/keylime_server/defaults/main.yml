@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: MIT
+---
+
+# Verifier.
+keylime_server_verifier_ip: 127.0.0.1
+keylime_server_verifier_port: 8881
+#
+# An example of database_url value for using sqlite:
+#   sqlite:////var/lib/keylime/cv_data.sqlite
+# An example of database_url value for using mysql:
+#   mysql+pymysql://keylime:keylime@keylime_db:[port]/verifier?charset=utf8
+#
+# If set as 'sqlite' keyword, will use the configuration set by the file located
+# at "/var/lib/keylime/cv_data.sqlite".
+# When using systems with legacy Keylime, e.g. Fedora 36 and/or Fedora 37,
+# keylime_server_verifier_database_url should be set to an empty string,
+# if one wants to use default sqlite configuration.
+keylime_server_verifier_database_url: |
+  {{ __keylime_server_verifier_default_db }}
+keylime_server_verifier_tls_dir: generate
+
+# If set as 'default', 'server-private.pem' is used as value.
+keylime_server_verifier_server_key: default
+
+# Set the password used to decrypt the server private key file.
+# If 'tls_dir = generate', this password will also be used to protect the
+# generated server private key.
+# If left empty, the private key will not be encrypted.
+keylime_server_verifier_server_key_passphrase: default
+
+# The name of the file containing the Keylime verifier server certificate.
+# The file should be stored in the directory set in the 'tls_dir' option.
+#
+# If set as 'default', the value 'server-cert.crt' is used.
+keylime_server_verifier_server_cert: default
+
+# The list of trusted client CA certificates.
+# The files in the list should be stored in the directory set in the
+# 'keylime_server_verifier_tls_dir' option.
+#
+# If set as 'default', the value is set as '[cacert.crt]'
+keylime_server_verifier_trusted_client_ca: default
+
+# The name of the file containing the Keylime verifier client private key.
+# The file should be stored in the directory set in the 'tls_dir' option.
+# This private key is used by the Keylime verifier to connect to the other
+# services using TLS.
+#
+# If set as 'default', the value 'client-private.pem' is used.
+keylime_server_verifier_client_key: default
+
+# Set the password used to decrypt the client private key file.
+# If 'tls_dir = generate', this password will also be used to protect the
+# generated client private key.
+# If left empty, the private key will not be encrypted.
+keylime_server_verifier_client_key_passphrase: default
+
+# The name of the file containing the Keylime verifier client certificate.
+# The file should be stored in the directory set in the 'tls_dir' option.
+# This certificate is used by the Keylime verifier to connect to the other
+# services using TLS.
+#
+# If set as 'default', the 'client-cert.crt' value is used.
+keylime_server_verifier_client_cert: default
+
+# The list of trusted server CA certificates.
+# The files in the list should be stored in the directory set in the 'tls_dir'
+# option.
+#
+# If set as 'default', the value is set as '[cacert.crt]'
+keylime_server_verifier_trusted_server_ca: default
+
+# Registrar.
+
+# The registrar server IP address and port.
+keylime_server_registrar_ip: 127.0.0.1
+keylime_server_registrar_port: 8890
+
+# An example of database_url value for using sqlite:
+#   sqlite:////var/lib/keylime/reg_data.sqlite
+# An example of database_url value for using mysql:
+#   mysql+pymysql://keylime:keylime@keylime_db:[port]/registrar?charset=utf8
+#
+# If set as 'sqlite' keyword, will use the configuration set by the file located
+# at "/var/lib/keylime/reg_data.sqlite".
+# When using systems with legacy Keylime, e.g. Fedora 36 and/or Fedora 37,
+# keylime_server_registrar_database_url should be set to an empty string,
+# if one wants to use default sqlite configuration.
+keylime_server_registrar_database_url: |
+  {{ __keylime_server_registrar_default_db }}
+
+# If set as 'default', share the files with the verifier by using the
+# 'var/lib/keylime/cv_ca' directory, which should contain the files indicated by
+# the 'server_key', 'server_cert', and 'trusted_client_ca' options.
+keylime_server_registrar_tls_dir: default
+
+# If set as 'default', the value 'server-private.pem' is used.
+keylime_server_registrar_server_key: default
+# If left empty, the private key will not be encrypted.
+keylime_server_registrar_server_key_passphrase: default
+# If set as 'default', the value 'server-cert.crt' is used.
+keylime_server_registrar_server_cert: default
+# If set as 'default', the value is set as '[cacert.crt]'
+keylime_server_registrar_trusted_client_ca: default

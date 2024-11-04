@@ -1,0 +1,121 @@
+---
+- name: Revert snapshots of logical volumes across different volume groups
+  hosts: all
+  vars:
+    test_disk_min_size: "1g"
+    test_disk_count: 10
+    test_storage_pools:
+      - name: test_vg1
+        disks: "{{ range(0, 3) | map('extract', unused_disks) | list }}"
+        volumes:
+          - name: lv1
+            size: "15%"
+          - name: lv2
+            size: "50%"
+      - name: test_vg2
+        disks: "{{ range(3, 6) | map('extract', unused_disks) | list }}"
+        volumes:
+          - name: lv3
+            size: "10%"
+          - name: lv4
+            size: "20%"
+      - name: test_vg3
+        disks: "{{ range(6, 10) | map('extract', unused_disks) | list }}"
+        volumes:
+          - name: lv5
+            size: "30%"
+          - name: lv6
+            size: "25%"
+          - name: lv7
+            size: "10%"
+          - name: lv8
+            size: "10%"
+    snapshot_test_set:
+      name: snapset1
+      volumes:
+        - name: snapshot VG1 LV1
+          vg: test_vg1
+          lv: lv1
+          percent_space_required: 20
+        - name: snapshot VG2 LV3
+          vg: test_vg2
+          lv: lv3
+          percent_space_required: 15
+        - name: snapshot VG2 LV4
+          vg: test_vg2
+          lv: lv4
+          percent_space_required: 15
+        - name: snapshot VG3 LV7
+          vg: test_vg3
+          lv: lv7
+          percent_space_required: 15
+  tasks:
+    - name: Run tests
+      block:
+        - name: Setup
+          include_tasks: tasks/setup.yml
+
+        - name: Run the snapshot role to create a snapshot set of LVs
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_action: snapshot
+            snapshot_lvm_set: "{{ snapshot_test_set }}"
+
+        - name: Verify the set of snapshots for the LVs
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_action: check
+            snapshot_lvm_set: "{{ snapshot_test_set }}"
+            snapshot_lvm_verify_only: true
+
+        - name: Revert the set
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_action: revert
+            snapshot_lvm_set: "{{ snapshot_test_set }}"
+
+        - name: Assert changes for revert
+          assert:
+            that: snapshot_cmd["changed"]
+
+        - name: Verify the revert is done with snapshot_lvm_verify_only
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_verify_only: true
+            snapshot_lvm_action: revert
+            snapshot_lvm_set: "{{ snapshot_test_set }}"
+
+        - name: Revert the set again to check idempotence
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_action: revert
+            snapshot_lvm_set: "{{ snapshot_test_set }}"
+
+        - name: Assert no changes for revert
+          assert:
+            that: not snapshot_cmd["changed"]
+
+        - name: Run the snapshot role remove the set
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_action: remove
+            snapshot_lvm_set: "{{ snapshot_test_set }}"
+
+        - name: Run the snapshot role to verify the set is removed
+          include_role:
+            name: fedora.linux_system_roles.snapshot
+          vars:
+            snapshot_lvm_action: remove
+            snapshot_lvm_set: "{{ snapshot_test_set }}"
+            snapshot_lvm_verify_only: true
+
+      always:
+        - name: Cleanup
+          include_tasks: tasks/cleanup.yml
+          tags: tests::cleanup

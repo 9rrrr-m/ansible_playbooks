@@ -1,0 +1,57 @@
+---
+- name: Restore playbook.yml
+  hosts: webservers
+  vars_files: vars/vars.yml
+  tasks:
+    # ---------------------------------------- #
+    # 1) 방화벽 서비스 제거
+    # 2) 서비스 중지 - httpd, firewalld
+    # 3) 웹 서버 설정 파일 제거
+    # 3.1) /etc/pki/tls/certs/localhost.crt
+    # 3.2) /etc/pki/tls/private/localhost.key
+    # 3.3) /var/www/html/index.html
+    # 4) 패키지 삭제 - httpd, mod_ssl
+    # ---------------------------------------- #
+
+    # 1) 방화벽 서비스 제거
+    - name: 1) 방화벽 서비스 제거 - {{ firewall_rule }}
+      ansible.posix.firewalld:
+        service: "{{ item }}"
+        permanent: true
+        immediate: true
+        state: disabled
+      loop: "{{ firewall_rule }}"
+
+    # 2) 서비스 중지 - httpd, firewalld
+    - name: 2) 서비스 중지 - {{ services }}
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: false
+        state: stopped
+      loop: "{{ services }}"
+
+    # 3) 웹 서버 설정 파일 제거
+    # 3.1) /etc/pki/tls/certs/localhost.crt
+    # 3.2) /etc/pki/tls/private/localhost.key
+    # 3.3) /var/www/html/index.html
+    - name: Block ~ Rescue
+      block:
+        - name: 3) 웹 서버 설정 파일 제거
+          ansible.builtin.file:
+            path: "{{ item.dest }}"
+            state: absent
+          loop: "{{ web_config_files }}"
+      rescue:
+        - name: 3) 웹 서버 설정 - 에러 메세지 출력
+          ansible.builtin.debug:
+            msg: "[ FAIL ] 웹 서버 설정 파일이 삭제되지 않았습니다."
+
+    # 4) 패키지 삭제 - httpd, mod_ssl
+    - name: 4) 패키지 삭제 - httpd, mod_ssl
+      vars:
+        packages:
+          - httpd
+          - mod_ssl
+      ansible.builtin.dnf:
+        name: "{{ packages }}"
+        state: absent

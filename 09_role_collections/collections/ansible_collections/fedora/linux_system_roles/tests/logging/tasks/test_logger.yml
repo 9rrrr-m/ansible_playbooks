@@ -1,0 +1,40 @@
+---
+- name: Check test log and check for errors
+  vars:
+    __logging_message: testMessage{{ __logging_index }}
+    __logging_tag: testTag{{ __logging_index }}
+  block:
+    - name: Run logger to generate a test log message
+      command: >-
+        /bin/logger -i -p local6.info -t {{ __logging_tag | quote }}
+        {{ __logging_message | quote }}
+      changed_when: false
+
+    - name: Check the test log message in {{ __default_system_log }}
+      command: >-
+        /bin/grep {{ __logging_message | quote }} {{ __logging_file | quote }}
+      register: __result
+      until: __result is success
+      retries: 60
+      delay: 1
+      changed_when: false
+  rescue:
+    - name: See what's in logging file if the test fails
+      command: tail -100 {{ __logging_file | quote }}
+      changed_when: false
+
+    - name: Collect system information upon failure
+      shell: |
+        echo ############
+        journalctl -u rsyslog
+        echo ############
+        cat /etc/rsyslog.conf
+        echo ############
+        ls -alrtF /etc/rsyslog.d
+      changed_when: false
+
+    - name: Fail if the message was not printed
+      fail:
+        msg: >
+          Missing log message "{{ __logging_message }}" in
+          "{{ __logging_file }}"

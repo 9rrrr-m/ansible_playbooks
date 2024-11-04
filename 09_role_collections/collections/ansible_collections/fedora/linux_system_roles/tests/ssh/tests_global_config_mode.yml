@@ -1,0 +1,53 @@
+---
+- name: Test we can write global config with given permissions
+  hosts: all
+  gather_facts: true
+  vars:
+    __ssh_test_backup_files:
+      - /etc/ssh/ssh_config.d/00-ansible.conf
+      - /etc/ssh/ssh_config
+
+  tasks:
+    - name: Backup configuration files
+      include_tasks: tasks/backup.yml
+
+    - name: Run role
+      include_role:
+        name: fedora.linux_system_roles.ssh
+      vars:
+        ssh:
+          Compression: true
+          GSSAPIAuthentication: false
+      # bad example
+        ssh_config_owner: daemon
+        ssh_config_group: daemon
+        ssh_config_mode: 600
+
+    - name: Verify the configuration file was created with right content
+      block:
+        - name: Download the global configuration file
+          slurp:
+            src: "{{ main_ssh_config }}"
+          register: config
+
+        - name: Stat the configuration file too
+          stat:
+            path: "{{ main_ssh_config }}"
+          register: config_mode
+
+        - name: Verify the options are in the file
+          assert:
+            that:
+              - "'Compression yes' in config.content | b64decode"
+              - "'GSSAPIAuthentication no' in config.content | b64decode"
+
+        - name: Verify the file has expected permissions
+          assert:
+            that:
+              - config_mode.stat.exists
+              - config_mode.stat.gr_name == 'daemon'
+              - config_mode.stat.pw_name == 'daemon'
+              - config_mode.stat.mode == '0600'
+
+    - name: Restore configuration files
+      include_tasks: tasks/restore.yml

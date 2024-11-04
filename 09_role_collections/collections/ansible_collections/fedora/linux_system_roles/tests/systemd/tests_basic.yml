@@ -1,0 +1,212 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Ensure that deploying unit files work correctly
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_unit_file_templates:
+      - foo.service.j2
+  roles:
+    - fedora.linux_system_roles.systemd
+  tasks:
+    - name: Verify that unit file was deployed
+      stat:
+        path: /etc/systemd/system/foo.service
+
+- name: Ensure that deploying unit file dropins work correctly
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_dropins:
+      - foo.service.conf.j2
+  roles:
+    - fedora.linux_system_roles.systemd
+  tasks:
+    - name: Stat the dropin directory path
+      stat:
+        path: /etc/systemd/system/foo.service.d
+      register: dropin
+
+    - name: Check that drop in directory exists
+      assert:
+        that:
+          - dropin.stat.isdir | d(false)
+
+    - name: Verify that dropin file was deployed
+      stat:
+        path: /etc/systemd/system/foo.service.d/99-override.conf
+
+- name: Ensure that we can start units using the role
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_started_units:
+      - foo.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  tasks:
+    - name: Make sure that foo.service main state is active
+      assert:
+        that:
+          - >-
+            ansible_facts['systemd_units']
+            ['foo.service']
+            ['active_state'] == "active"
+          - >-
+            ansible_facts['systemd_units']
+            ['foo.service']
+            ['sub_state'] == "running"
+
+- name: Ensure that we can restart units using the role
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_restarted_units:
+      - foo.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  pre_tasks:
+    - name: Save MainPID of foo.service before restart
+    # noqa command-instead-of-module
+      command: systemctl show -p MainPID foo.service
+      register: pid_before_restart
+      changed_when: false
+  tasks:
+    - name: Get MainPID of foo.service
+    # noqa command-instead-of-module
+      command: systemctl show -p MainPID foo.service
+      register: pid_after_restart
+      changed_when: false
+
+    - name: Check that service was restarted by looking at MainPID
+      assert:
+        that:
+          - pid_before_restart.stdout != pid_after_restart.stdout
+
+- name: Ensure that we can reload units
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_reloaded_units:
+      - foo.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  pre_tasks:
+    - name: Delete reload flag file
+      file:
+        path: /tmp/foo-service-reloaded
+        state: absent
+  tasks:
+    - name: Reload operation should created flag file
+      stat:
+        path: /tmp/foo-service-reloaded
+
+- name: Ensure that we can enable unit files
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_enabled_units:
+      - foo.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  pre_tasks:
+    - name: Save UnitFileState before calling role
+    # noqa command-instead-of-module
+      command: systemctl show -p UnitFileState foo.service
+      register: unit_file_state_before
+      changed_when: false
+  tasks:
+    - name: Get UnitFileState=
+    # noqa command-instead-of-module
+      command: systemctl show -p UnitFileState foo.service
+      register: unit_file_state_after
+      changed_when: false
+
+    - name: Check that unit file was enabled
+      assert:
+        that:
+          - unit_file_state_before.stdout == "UnitFileState=disabled"
+          - unit_file_state_after.stdout == "UnitFileState=enabled"
+
+- name: Ensure that we can disable unit files
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_disabled_units:
+      - foo.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  tasks:
+    - name: Get UnitFileState=
+    # noqa command-instead-of-module
+      command: systemctl show -p UnitFileState foo.service
+      register: unit_file_state_now
+      changed_when: false
+
+    - name: Check that foo.service is disabled
+      assert:
+        that:
+          - unit_file_state_now.stdout == "UnitFileState=disabled"
+
+- name: Ensure that we can mask unit files
+  hosts: all
+  gather_facts: false
+  vars:
+  # It is not possible to mask admin units files in /etc/systemd/system.
+    systemd_masked_units:
+      - sshd.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  pre_tasks:
+    - name: Save UnitFileState before calling role
+    # noqa command-instead-of-module
+      command: systemctl show -p UnitFileState sshd.service
+      register: sshd_state_before
+      changed_when: false
+  tasks:
+    - name: Get UnitFileState=
+    # noqa command-instead-of-module
+      command: systemctl show -p UnitFileState sshd.service
+      register: sshd_state_after
+      changed_when: false
+
+    - name: Check that sshd is masked
+      assert:
+        that:
+          - sshd_state_before.stdout == "UnitFileState=enabled"
+          - >-
+            sshd_state_after.stdout == "UnitFileState=masked" or
+            sshd_state_after.stdout == "UnitFileState=bad"
+
+- name: Ensure that we can unmask unit files
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_unmasked_units:
+      - sshd.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  tasks:
+    - name: Get UnitFileState=
+    # noqa command-instead-of-module
+      command: systemctl show -p UnitFileState sshd.service
+      register: sshd_state_now
+      changed_when: false
+
+    - name: Check that sshd was correctly unmasked
+      assert:
+        that:
+          - sshd_state_now.stdout == "UnitFileState=enabled"
+
+- name: Ensure that we can stop units
+  hosts: all
+  gather_facts: false
+  vars:
+    systemd_stopped_units:
+      - foo.service
+  roles:
+    - fedora.linux_system_roles.systemd
+  tasks:
+    - name: Foo.service shouldn't be in systemd_units
+      fail:
+      when: ansible_facts['systemd_units']['foo.service'] is defined

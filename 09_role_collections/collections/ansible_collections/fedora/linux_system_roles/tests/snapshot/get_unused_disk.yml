@@ -1,0 +1,60 @@
+---
+- name: Determine if system is ostree and set flag
+  when: not __snapshot_is_ostree is defined
+  block:
+    - name: Check if system is ostree
+      stat:
+        path: /run/ostree-booted
+      register: __ostree_booted_stat
+
+    - name: Set flag to indicate system is ostree
+      set_fact:
+        __snapshot_is_ostree: "{{ __ostree_booted_stat.stat.exists }}"
+
+- name: Ensure test packages
+  package:
+    name: "{{ test_packages }}"
+    state: present
+    use: "{{ (__snapshot_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+  vars:
+  # util-linux needed for lsblk, findmnt, etc.
+    test_packages: "{{ ['util-linux-core'] if (ansible_facts['os_family'] == 'RedHat' and ansible_facts['distribution_major_version'] is version('8', '>')) else ['util-linux'] if ansible_facts['os_family'] == 'RedHat' else ['util-linux'] }}"
+
+- name: Find unused disks in the system
+  find_unused_disk:
+    min_size: "{{ min_size | d(omit) }}"
+    max_size: "{{ max_size | d(omit) }}"
+    max_return: "{{ max_return | d(omit) }}"
+    with_interface: "{{ storage_test_use_interface | d(omit) }}"
+  register: unused_disks_return
+
+- name: Set unused_disks if necessary
+  set_fact:
+    unused_disks: "{{ unused_disks_return.disks }}"
+  when: "'Unable to find unused disk' not in unused_disks_return.disks"
+
+- name: Print unused disks
+  debug:
+    var: unused_disks
+    verbosity: 2
+
+- name: Try to find out why there are not enough unused disks
+  when: unused_disks | d([]) | length < disks_needed | d(1)
+  block:
+    - name: Print info from find_unused_disk
+      debug:
+        var: unused_disks_return.info
+      when: unused_disks_return.info | d([]) | length > 0
+
+    - name: Show disk information
+      shell: |
+        set -euxo pipefail
+        exec 1>&2
+        lvs --all
+        pvs --all
+        vgs --all
+      changed_when: false
+
+    - name: Exit playbook when there's not enough unused disks in the system
+      fail:
+        msg: "Unable to find enough unused disks. Exiting playbook."

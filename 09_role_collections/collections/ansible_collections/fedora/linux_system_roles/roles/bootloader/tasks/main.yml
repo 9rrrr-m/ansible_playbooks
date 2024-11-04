@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Set platform/version specific variables
+  include_tasks: tasks/set_vars.yml
+
+- name: Fail on s390x architecture
+  fail:
+    msg: >-
+      This role does not support s390x architecture.
+      Let us know if you need the role to support it.
+  when: ansible_architecture == 's390x'
+
+- name: Ensure required packages are installed
+  package:
+    name: "{{ __bootloader_packages }}"
+    state: present
+    use: "{{ (__bootloader_is_ostree | d(false)) | ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
+
+- name: Get stat of {{ __bootloader_default_grub }}
+  stat:
+    path: "{{ __bootloader_default_grub }}"
+  register: __bootloader_default_grub_stat
+
+- name: If missing, add {{ __bootloader_default_grub }}
+  when: not __bootloader_default_grub_stat.stat.exists
+  block:
+    - name: Get bootloader args of the default kernel
+      shell: >-
+        set -euo pipefail;
+        grubby --info=DEFAULT | grep -oP 'args=\K(.*)'
+      register: __bootloader_default_args
+      changed_when: false
+
+    - name: Generate {{ __bootloader_default_grub }}
+      vars:
+        grub_cmdline_linux: "{{ __bootloader_default_args.stdout }}"
+      template:
+        src: etc_default_grub.j2
+        dest: "{{ __bootloader_default_grub }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+- name: Determine platform type
+  stat:
+    path: /sys/firmware/efi
+  register: __bootloader_efi_dir
+
+- name: Set boot loader configuration files
+  vars:
+    efi: "{{ __bootloader_efi_dir.stat.exists }}"
+  set_fact:
+    __bootloader_grub_conf: >-
+      {{ efi | ternary(__bootloader_uefi_conf_dir ~ 'grub.cfg',
+      '/boot/grub2/grub.cfg') }}
+    __bootloader_user_conf: >-
+      {{ efi | ternary(__bootloader_uefi_conf_dir ~ 'user.cfg',
+      '/boot/grub2/user.cfg') }}
+
+- name: Get stat of {{ __bootloader_default_grub }}
+  stat:
+    path: "{{ __bootloader_default_grub }}"
+  register: __bootloader_default_grub_stat
+
+- name: Get stat of {{ __bootloader_grub_conf }}
+  stat:
+    path: "{{ __bootloader_grub_conf }}"
+  register: __bootloader_grub_conf_stat
+
+- name: Use a general grub conf path if UEFI path has a stub config
+  when: __bootloader_grub_conf_stat.stat.exists | bool
+  block:
+    - name: Verify if there is a stab config in {{ __bootloader_grub_conf }}
+      shell: grep "configfile" {{ __bootloader_grub_conf }} || true
+      changed_when: false
+      register: __bootloader_grep_configfile
+      ignore_errors: true
+
+    - name: Use a general grub and user conf path if UEFI path has a stub config
+      when:
+        - __bootloader_grep_configfile.stdout | length > 0
+        - __bootloader_grub_conf == __bootloader_uefi_conf_dir ~ 'grub.cfg'
+      set_fact:
+        __bootloader_grub_conf: /boot/grub2/grub.cfg
+        __bootloader_user_conf: /boot/grub2/user.cfg
+
+- name: >-
+    Update boot loader timeout configuration in {{ __bootloader_default_grub }}
+  replace:
+    path: "{{ __bootloader_default_grub }}"
+    regexp: '^GRUB_TIMEOUT=.*'
+    replace: 'GRUB_TIMEOUT={{ bootloader_timeout }}'
+    mode: "{{ __bootloader_default_grub_stat.stat.exists | ternary(__bootloader_default_grub_stat.stat.mode, '0644') }}"
+
+- name: Update boot loader timeout configuration in {{ __bootloader_grub_conf }}
+  replace:
+    path: "{{ __bootloader_grub_conf }}"
+    regexp: 'set timeout=.*'
+    replace: 'set timeout={{ bootloader_timeout }}'
+    mode: "{{ __bootloader_grub_conf_stat.stat.exists | ternary(__bootloader_grub_conf_stat.stat.mode, '0644') }}"
+
+- name: Ensure boot loader settings
+  fedora.linux_system_roles.bootloader_settings:
+    bootloader_settings: "{{ bootloader_settings }}"
+  notify:
+    - Fix default kernel boot parameters
+    - Reboot system
+
+- name: Update boot loader password
+  when: bootloader_password is not none
+  block:
+    - name: Generate boot loader password
+      shell: >-
+        set -euo pipefail;
+        ( echo {{ bootloader_password | quote }} ;
+        echo {{ bootloader_password | quote }} )
+        | LC_ALL=C grub2-mkpasswd-pbkdf2
+        | grep -v '[eE]nter password:'
+        | sed -e "s/PBKDF2 hash of your password is //"
+      register: __bootloader_pass_hash
+      changed_when: true
+      no_log: true
+
+    - name: Put boot loader password to {{ __bootloader_user_conf }}
+      copy:
+        content: GRUB2_PASSWORD={{ __bootloader_pass_hash.stdout }}
+        dest: "{{ __bootloader_user_conf }}"
+        mode: "0600"
+      changed_when: true
+      no_log: true
+
+- name: Remove boot loader password configuration
+  file:
+    path: "{{ __bootloader_user_conf }}"
+    state: absent
+  when: bootloader_remove_password | bool
+
+# Keep at the end of tasks to collect latest info
+- name: Collect bootloader facts
+  fedora.linux_system_roles.bootloader_facts:
+  when: bootloader_gather_facts | bool

@@ -1,0 +1,34 @@
+{{ ansible_managed | comment }}
+{{ "system_role:kdump" | comment(prefix="", postfix="") }}
+
+{% if kdump_target %}
+{% if kdump_target.type == "ssh" %}
+ssh {{ kdump_target.location | d(kdump_ssh_user ~ '@' ~ kdump_ssh_server) }}
+
+{% if kdump_sshkey != '/root/.ssh/kdump_id_rsa' %}
+sshkey {{ kdump_sshkey }}
+{% endif %}
+{% else %}
+{{ kdump_target.type }} {{ kdump_target.location  }}
+
+{% endif %}
+{% endif %}
+
+path {{ kdump_path }}
+{% if kdump_core_collector %}
+core_collector {{ kdump_core_collector }}
+{% endif %}
+
+{% if ansible_facts['distribution'] in ['RedHat', 'CentOS', 'Fedora'] %}
+{% if ansible_facts['distribution_major_version'] | int >= 9 %}
+auto_reset_crashkernel {{ kdump_auto_reset_crashkernel | bool | ternary("yes", "no") }}
+failure_action {{ kdump_system_action }}
+{% else %}
+default {{ kdump_system_action }}
+{% endif %}
+{% if ansible_facts['distribution_major_version'] | int >= 7 %}
+{% if kdump_dracut_args %}
+dracut_args {{ kdump_dracut_args }}
+{% endif %}
+{% endif %}
+{% endif %}

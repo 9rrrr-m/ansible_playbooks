@@ -1,0 +1,17 @@
+---
+- name: Ensure that the role runs with default parameters
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Run test
+      block:
+        - name: Run role with no settings
+          include_role:
+            name: fedora.linux_system_roles.kernel_settings
+            public: true
+
+      always:
+        - name: Cleanup
+          tags:
+            - tests::cleanup
+          include_tasks: tasks/cleanup.yml

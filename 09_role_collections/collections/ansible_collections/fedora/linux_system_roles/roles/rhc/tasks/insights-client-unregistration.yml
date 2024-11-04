@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT
+---
+- name: Call insights status
+  include_tasks: check-insights-status.yml
+
+- name: Unregister insights-client
+  shell: insights-client --unregister & wait
+  when:
+    - >-
+      "This host is registered" in __rhc_insights_status.stdout
+      or "Registered" in __rhc_insights_status.stdout
+  register: __rhc_insights_unregister_result
+  changed_when: true
+
+- name: Reset ansible host in config
+  lineinfile:
+    path: "{{ __rhc_insights_conf }}"
+    regexp: "^ansible_host="
+    state: absent
+
+- name: Reset display name in config
+  lineinfile:
+    path: "{{ __rhc_insights_conf }}"
+    regexp: "^display_name="
+    state: absent
